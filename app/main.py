@@ -15,7 +15,10 @@ def query_nfe(payload: NFeQueryRequest):
     try:
         raw_response = sefaz_client.query_by_access_key(payload.access_key)
         c_stat, x_motivo = sefaz_client.parse_status(raw_response)
+        documents = sefaz_client.extract_documents(raw_response)
+        print(documents)
     except sefaz_client.SefazError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
     return NFeQueryResponse(c_stat=c_stat, x_motivo=x_motivo)
+
