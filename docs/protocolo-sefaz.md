@@ -37,10 +37,17 @@ stateDiagram-v2
     NaoDisponivel --> [*]: cStat 137 (nenhum documento localizado)
 ```
 
-**Achado importante da Fase 0**: a disponibilização de documentos só vale **a partir do primeiro
-acesso do CNPJ ao serviço** — notas emitidas antes desse primeiro acesso nunca aparecem
-retroativamente. Isso explicou por que as 3 primeiras chaves testadas (notas de antes de
-30/07/2026) voltaram `cStat 137`, mesmo sendo notas reais e válidas.
+**Hipótese parcialmente corrigida (30-31/07/2026)**: achávamos que só notas emitidas *depois*
+do primeiro acesso do CNPJ ficariam disponíveis. Na prática, uma chave que retornou `cStat 137`
+na primeira tentativa (nota emitida antes do primeiro acesso) passou a retornar `cStat 138`
+(documento localizado) horas depois, no mesmo dia. Parece existir um atraso de indexação que
+eventualmente libera histórico também, não só notas futuras — mecanismo exato não confirmado,
+só o resultado observado.
+
+**Confirmado com nota real (31/07/2026)**: sem manifestação, o `docZip` traz só o **Resumo da
+NF-e** (`resNFe`), com estes campos: `chNFe`, `CNPJ`/`xNome` (emitente), `dhEmi`, `vNF` (valor
+total), `nProt`, `cSitNFe`. **Não vêm os itens** (produto/quantidade/valor unitário) — só no
+`nfeProc` completo, depois da manifestação.
 
 **Implicação de escopo**: sem enviar o evento de manifestação, só o **Resumo** fica disponível —
 não dá pra pré-preencher itens/quantidades/valores só com o resumo. O `API_Sefaz` precisa
@@ -48,8 +55,8 @@ implementar o envio da manifestação como parte do fluxo, não só a consulta (
 ao `TODO.md`, Fase 2).
 
 ⚠️ **Não confirmado ainda**: quanto tempo leva entre enviar a manifestação e o documento completo
-ficar disponível (imediato? alguns minutos?). Só vamos confirmar isso testando com uma nota nova
-de verdade — anotar o resultado aqui quando validarmos.
+ficar disponível (imediato, segundo a documentação/comunidade — mandar a Ciência e já consultar de
+novo — mas ainda não testamos isso na prática). Anotar o resultado aqui quando validarmos.
 
 ## 3. Fluxo de consulta + manifestação (detalhado)
 
@@ -72,6 +79,80 @@ sequenceDiagram
     App->>App: parseia XML (emitente, itens, valores)
 ```
 
+## 3.5. Manifestação do Destinatário — o que é e como funciona
+
+Pesquisa feita em 31/07/2026 porque tínhamos receio de ser algo burocrático (contato com a SEFAZ,
+documentos). **Não é** — é só mais uma chamada de webservice, com o mesmo certificado, só que com
+uma exigência técnica a mais: o XML precisa vir **assinado digitalmente** (diferente da consulta,
+que só usa o certificado pra autenticar a conexão mTLS, sem assinar o conteúdo).
+
+### Os 4 tipos de evento
+
+| Evento | `tpEvento` | O que significa | Obrigatório? |
+|---|---|---|---|
+| Ciência da Operação/Emissão | 210210 | "Estou ciente que essa nota existe pro meu CNPJ" — não confirma nem nega nada | **Opcional**, sempre — é o único que não exige decisão de negócio |
+| Confirmação da Operação | 210200 | Confirma que a compra aconteceu de fato | Obrigatório só pra categorias reguladas (combustível, cigarro, bebida alcoólica/refrigerada, quando destinado a distribuidor/atacadista) |
+| Desconhecimento da Operação | 210220 | "Não reconheço essa operação" | Mesma regra acima |
+| Operação Não Realizada | 210240 | "A operação não aconteceu" (recusou entrega, etc.) | Mesma regra acima |
+
+**Pro nosso caso** (compras de manutenção — rolamento, folha A4, correia — não são as categorias
+regulamentadas acima): só a **Ciência da Operação** é relevante pro `API_Sefaz`, e ela é
+justamente a que não compromete a empresa com nada — só destrava a visualização do XML completo.
+A Confirmação/Desconhecimento/Operação Não Realizada, se forem legalmente exigidas pro tipo de
+compra da empresa, são decisão de negócio/contábil, fora do escopo do software por enquanto —
+confirmar com o contador se aplica.
+
+⚠️ **Prazo legal (não é sobre o software, é sobre a empresa)**: existe um prazo pra registrar um
+dos eventos conclusivos quando aplicável. Fontes conflitam: uma diz 180 dias a partir da
+autorização da NF-e, outra diz que caiu pra **90 dias a partir de 01/06/2026** (Ajuste SINIEF
+14/2026). Não confirmado com certeza — checar com o contador antes de depender desse número.
+
+### Estrutura do XML (evento assinado)
+
+```xml
+<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
+  <idLote>000000013199210</idLote>
+  <evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
+    <infEvento Id="ID210210[chNFe 44 dígitos][nSeqEvento 2 dígitos]">
+      <cOrgao>[código IBGE da UF]</cOrgao>
+      <tpAmb>1</tpAmb>
+      <CNPJ>[CNPJ da empresa]</CNPJ>
+      <chNFe>[chave de acesso da nota]</chNFe>
+      <dhEvento>[timestamp ISO 8601 com timezone]</dhEvento>
+      <tpEvento>210210</tpEvento>
+      <nSeqEvento>1</nSeqEvento>
+      <verEvento>1.00</verEvento>
+      <detEvento versao="1.00">
+        <descEvento>Ciencia da Operacao</descEvento>
+      </detEvento>
+    </infEvento>
+    <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+      <!-- assinatura sobre o <infEvento>, canonicalização c14n, RSA-SHA1 -->
+    </Signature>
+  </evento>
+</envEvento>
+```
+
+- **Onde assina**: o `<infEvento>` inteiro (referenciado pelo `Id`), não o `<envEvento>` todo.
+- **Biblioteca planejada**: `signxml` (Python) — não vamos implementar a assinatura XML na mão.
+- **Segurança da assinatura em trânsito**: a chave privada nunca sai da máquina. O que trafega é o
+  `SignatureValue` (resultado de mão única — não dá pra reconstruir a chave privada a partir dele)
+  e o certificado **público** (`X509Certificate`, mesmo dado que já vimos com `openssl` na Fase 0).
+  A conexão em si já é protegida por TLS/mTLS, como a consulta que já validamos.
+
+### `cStat` específicos deste webservice (diferente da consulta)
+
+| cStat | Significado | Ação |
+|---|---|---|
+| **135** | Evento registrado e vinculado à NF-e | **Único código tratado como sucesso** — segue e consulta de novo pra pegar o doc completo |
+| 136 | Evento registrado, mas **não vinculado** à NF-e | Parar e reportar — não é sucesso completo, algo não bateu |
+| 640 | Ciência não pode ocorrer depois de manifestação final já registrada | Parar e reportar |
+| 650 | Evento inválido pra nota cancelada/denegada | Parar e reportar |
+
+Regra do projeto (decidida em 31/07/2026, "segurança em primeiro lugar"): **só o `cStat 135`
+é tratado como sucesso**. Qualquer outro código — incluindo os listados acima e qualquer coisa
+não reconhecida — interrompe o fluxo e é reportado, sem tentar interpretar ou repetir sozinho.
+
 ## 4. Regras de uso indevido (anti-abuso) — o que já validamos
 
 Confirmado testando na prática (Fase 0) + pesquisa complementar:
@@ -84,6 +165,7 @@ Confirmado testando na prática (Fase 0) + pesquisa complementar:
 | Reconsulta após `cStat 137` | Consultar de novo **antes de completar 1h** depois de um "nenhum documento localizado" já conta como uso indevido, mesmo estando bem abaixo do limite de 20 | confirmado na prática (Fase 0) — levamos `cStat 656` |
 | `distNSU` fora de ordem | Pular pra um NSU arbitrário (não usar o `ultNSU` exato da resposta anterior) conta como uso indevido | confirmado na prática (Fase 0) — levamos `cStat 656` ao pular de NSU 50 pra 6552 |
 | Múltiplas instâncias do mesmo CNPJ | Se mais de um processo/app consultar pelo mesmo CNPJ, todos precisam respeitar a mesma sequência ascendente de NSU — do contrário conta como uso indevido | Inventti (secundária) |
+| ⚠️ **Escalada de bloqueio** | Bloqueios repetidos (`cStat 656`) fazem o tempo de bloqueio **aumentar** a cada reincidência. Depois de mais de **50 bloqueios de 60 min consecutivos**, a SEFAZ pode bloquear o **CNPJ ou IP permanentemente** — só resolve entrando em contato direto com a SEFAZ. Não afeta o certificado nem a capacidade da empresa de emitir/receber notas reais, é isolado a esse canal. | Oobj / Vinco (secundárias, pesquisa 31/07/2026) |
 
 ### O que isso significa pra arquitetura do `API_Sefaz`
 
@@ -115,4 +197,8 @@ Confirmado testando na prática (Fase 0) + pesquisa complementar:
 - [cStat 137 — Nenhum documento localizado (WebGer)](https://webger.com.br/cstat-137-nenhum-documento-localizado-para-o-destinatario/)
 - [Regras de Consumo Indevido para DFe (NS Tecnologia)](https://blog.nstecnologia.com.br/regras-de-consumo-indevido-para-dfe/)
 - [Atualização das Regras de Uso Indevido do Web Service NFeDistribuicaoDFe (Inventti)](https://inventti.com.br/nf-e-atualizacao-das-regras-de-uso-indevido-do-web-service-nfedistribuicaodfe/)
+- [Sefaz poderá bloquear permanentemente por Consumo Indevido (Oobj)](https://oobj.com.br/legislacao/sefaz-bloquear-consumo-indevido/)
+- [Manifestação do destinatário na NF-e: NT 2020.001 (Nota Gateway)](https://notagateway.com.br/blog/manifestacao-do-destinatario-na-nf-e-entenda-a-recente-nt-2020-001-v1-10-e-os-prazos-atualizados/)
+- [Manifestação do destinatário: NT 2020.001 v1.60 reduz prazo pra 90 dias (Sped Brasil)](https://spedbrasil.com.br/manifestacao-destinatario-nfe-2020-001-v160/)
+- [SignXML — biblioteca Python de assinatura XML](https://xml-security.github.io/signxml/)
 - Resultado dos testes reais: `API_Sefaz/TODO.md`, seção "Fase 0"
