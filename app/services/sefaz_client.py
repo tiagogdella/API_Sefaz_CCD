@@ -1,6 +1,8 @@
 import requests
 import requests_pkcs12
 import re
+import base64
+import gzip
 
 from app.core.config import settings
 
@@ -8,6 +10,7 @@ URL ="https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx
 VERSION = "1.01"
 _C_STAT_PATTERN = re.compile(r"<cStat>(\d+)</cStat>")
 _X_MOTIVO_PATTERN = re.compile(r"<xMotivo>(.*?)</xMotivo>")
+_DOC_ZIP_PATTERN = re.compile(r"<docZip[^>]*>(.*?)</docZip>", re.DOTALL)
 
 class SefazError(Exception):
     """Connection/network error talking to SEFAZ (not a business rejection — that comes in cStat)."""
@@ -57,3 +60,11 @@ def parse_status(xml_response:str) -> tuple[str, str]:
         raise SefazError("Could not parse cStat/xMotivo from SEFAZ response")
 
     return c_stat_match.group(1), x_motivo_match.group(1)
+
+def extract_documents(xml_response: str) -> list[str]:
+    encoded_documents = _DOC_ZIP_PATTERN.findall(xml_response)
+    documents = []
+    for encoded in encoded_documents:
+        compressed = base64.b64decode(encoded)
+        documents.append(gzip.decompress(compressed).decode("utf-8"))
+    return documents
