@@ -59,18 +59,18 @@ Marque cada item com `[x]` conforme for concluindo.
 
 ## Fase 2 — Cliente SEFAZ (core da integração)
 
-- [ ] Módulo de certificado: carregar o `.pfx` uma vez na inicialização (cache em memória), sem re-ler do disco a cada requisição
-- [ ] Cliente SOAP (`zeep` ou envelope manual com `httpx`) configurado com o certificado pra falar com o `NFeDistribuicaoDFe`
-- [ ] Função `consultar_por_chave(chave: str)` que monta o `consChNFe`, envia e recebe a resposta
-- [ ] Descompactar `docZip` (base64 + gzip) e parsear o XML da nota (`lxml` ou `xmltodict`) extraindo: emitente (CNPJ, nome), itens (produto, quantidade, valor unitário, valor total), valor total da nota, data de emissão
+- [x] Módulo de certificado: `app/services/certificate.py` — carrega o `.pfx` e converte pra PEM em memória (usado por `requests_pkcs12` na consulta e por `xmlsec` na assinatura da manifestação)
+- [x] Cliente SOAP: envelope manual com `requests`/`requests_pkcs12` (não usamos `zeep` — o envelope da consulta é simples o suficiente pra montar na mão, sem depender de parsing de WSDL)
+- [x] Função `query_by_access_key` (`app/services/sefaz_client.py`) — monta o `consChNFe`, envia e recebe a resposta
+- [x] Descompactar `docZip` — feito (`extract_documents`, base64 + gzip). **Ainda falta**: parsear o XML do `nfeProc` pra extrair estruturado (emitente, itens, valor total) — ver Fase 3, é o que falta pro `/consultas/nfe` virar "JSON tratado" de verdade
 - [ ] Tratar os casos de retorno sem sucesso da própria SEFAZ (cStat diferente de sucesso: nota não encontrada, chave inválida, ambiente errado) mapeando pra mensagens claras
 - [x] Implementar o envio do evento de **Manifestação do Destinatário** (`envEvento`/`RecepcaoEvento`, tipo "Ciência da Operação") — feito e validado com nota real em 03/08/2026: `cStat 135` (evento registrado) e a consulta seguinte já veio com `nfeProc` completo (5 itens, valores, impostos). Liberação foi **imediata**, sem espera. Detalhes técnicos (assinatura XML, `cOrgao=91` fixo, estrutura de resposta em duas camadas) em `docs/protocolo-sefaz.md`
 - [ ] Respeitar o intervalo mínimo de 1h entre novas consultas depois de um `cStat 137` (regra de uso indevido descoberta na Fase 0) — implementar esperando/avisando, não tratando como erro fatal
 
 ## Fase 3 — Contrato da API (o que o monolito consome)
 
-- [ ] Definir o schema Pydantic da resposta: o que veio automaticamente da SEFAZ vs. o que precisa ficar em branco pra preenchimento manual no formulário
-- [ ] `POST /consultas/nfe` — recebe `{ chaveAcesso: string }`, devolve o JSON tratado (ou erro claro e padronizado)
+- [x] Definir o schema Pydantic da resposta — `NfeParsed`/`NfeItem` (`app/schemas/nfe.py`): fornecedor, CNPJ, data de emissão, valor total, lista de itens (código, descrição, quantidade, unidade, valor unitário, valor total)
+- [x] `POST /consultas/nfe` — recebe `{ accessKey: string }`, devolve o JSON tratado com itens — testado com nota real, veio limpo e completo (03/08/2026)
 - [ ] Tratamento de erros HTTP consistente: certificado inválido/expirado, timeout de rede, nota não encontrada, chave malformada — sempre com corpo de erro previsível pro monolito conseguir tratar
 - [ ] Testes automatizados dos parsers usando XMLs de exemplo salvos localmente (sem depender de bater na SEFAZ real a cada rodada de teste)
 - [x] **`POST /consultas/xml`** (necessidade nova, 03/08/2026) — feito e testado: consulta + manifestação automática (função `get_full_document` em `sefaz_client.py`, reaproveitável pro `/consultas/nfe` também), devolve o **XML completo cru** (`nfeProc`) via `Response(media_type="application/xml")`. Base da aba "Consultar XML" do monolito pronta do lado da API
