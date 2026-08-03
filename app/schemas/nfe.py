@@ -15,3 +15,20 @@ class NFeQueryRequest(BaseModel):
 class NFeQueryResponse(BaseModel):
     c_stat: str
     x_motivo: str
+
+class NfeItem(BaseModel):
+    code: str
+    description: str
+    quantity: float
+    unit: str
+    unit_price: float
+    total_price: float
+
+
+class NfeParsed(BaseModel):
+    access_key: str
+    supplier_cnpj: str
+    supplier_name: str
+    issue_date: str
+    total_amount: float
+    items: list[NfeItem]
