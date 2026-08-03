@@ -1,5 +1,4 @@
-from fastapi import FastAPI, HTTPException
-
+from fastapi import FastAPI, HTTPException, Response
 from app.core.config import settings
 from app.schemas.nfe import NFeQueryRequest, NFeQueryResponse
 from app.services import sefaz_client
@@ -22,3 +21,11 @@ def query_nfe(payload: NFeQueryRequest):
 
     return NFeQueryResponse(c_stat=c_stat, x_motivo=x_motivo)
 
+@app.post("/consultas/xml")
+def query_xml(payload: NFeQueryRequest):
+    try:
+        xml_document = sefaz_client.get_full_document(payload.access_key)
+    except sefaz_client.SefazError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    return Response(content=xml_document, media_type="application/xml")
