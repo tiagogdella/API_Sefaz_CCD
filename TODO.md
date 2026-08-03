@@ -64,7 +64,7 @@ Marque cada item com `[x]` conforme for concluindo.
 - [ ] Função `consultar_por_chave(chave: str)` que monta o `consChNFe`, envia e recebe a resposta
 - [ ] Descompactar `docZip` (base64 + gzip) e parsear o XML da nota (`lxml` ou `xmltodict`) extraindo: emitente (CNPJ, nome), itens (produto, quantidade, valor unitário, valor total), valor total da nota, data de emissão
 - [ ] Tratar os casos de retorno sem sucesso da própria SEFAZ (cStat diferente de sucesso: nota não encontrada, chave inválida, ambiente errado) mapeando pra mensagens claras
-- [ ] Implementar o envio do evento de **Manifestação do Destinatário** (`envEvento`/`RecepcaoEvento`, tipo "Ciência da Operação") — descoberto na Fase 0: sem isso, só o Resumo da NF-e fica disponível, não o XML completo com os itens
+- [x] Implementar o envio do evento de **Manifestação do Destinatário** (`envEvento`/`RecepcaoEvento`, tipo "Ciência da Operação") — feito e validado com nota real em 03/08/2026: `cStat 135` (evento registrado) e a consulta seguinte já veio com `nfeProc` completo (5 itens, valores, impostos). Liberação foi **imediata**, sem espera. Detalhes técnicos (assinatura XML, `cOrgao=91` fixo, estrutura de resposta em duas camadas) em `docs/protocolo-sefaz.md`
 - [ ] Respeitar o intervalo mínimo de 1h entre novas consultas depois de um `cStat 137` (regra de uso indevido descoberta na Fase 0) — implementar esperando/avisando, não tratando como erro fatal
 
 ## Fase 3 — Contrato da API (o que o monolito consome)

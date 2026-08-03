@@ -54,9 +54,10 @@ não dá pra pré-preencher itens/quantidades/valores só com o resumo. O `API_S
 implementar o envio da manifestação como parte do fluxo, não só a consulta (item já adicionado
 ao `TODO.md`, Fase 2).
 
-⚠️ **Não confirmado ainda**: quanto tempo leva entre enviar a manifestação e o documento completo
-ficar disponível (imediato, segundo a documentação/comunidade — mandar a Ciência e já consultar de
-novo — mas ainda não testamos isso na prática). Anotar o resultado aqui quando validarmos.
+✅ **Confirmado (03/08/2026)**: o tempo entre enviar a manifestação e o documento completo ficar
+disponível é **imediato** — mandamos a Ciência da Operação e a próxima consulta (`consChNFe`) já
+veio com o `nfeProc` completo (emitente, 5 itens com valores/impostos, totais, protocolo de
+autorização original da nota). Fluxo ponta a ponta validado com nota real.
 
 ## 3. Fluxo de consulta + manifestação (detalhado)
 
@@ -134,20 +135,53 @@ autorização da NF-e, outra diz que caiu pra **90 dias a partir de 01/06/2026**
 ```
 
 - **Onde assina**: o `<infEvento>` inteiro (referenciado pelo `Id`), não o `<envEvento>` todo.
-- **Biblioteca planejada**: `signxml` (Python) — não vamos implementar a assinatura XML na mão.
+- **Biblioteca usada de fato**: `xmlsec` (bindings Python pra `libxmlsec1`), **não** `signxml` — o `signxml`
+  bloqueia SHA1 por padrão, sem nenhuma forma de destravar via configuração (confirmado lendo o
+  código-fonte da biblioteca), e o schema da SEFAZ exige exatamente RSA-SHA1. Outros projetos Python
+  de NFe reais (ex: `PyTrustNFe`) usam `xmlsec` pelo mesmo motivo.
+- **Pegadinhas reais que encontramos implementando** (pra não redescobrir):
+  1. `xmlsec` exige pacotes de sistema (`libxmlsec1-dev`, `pkg-config`), não só `pip install`.
+  2. **OpenSSL 3 desativa SHA1 pro `libxmlsec1` por padrão** ("failed to sign" genérico) — precisa
+     ativar o provider `legacy` do OpenSSL via `OPENSSL_CONF` apontando pra um `.cnf` customizado.
+  3. O atributo `Id` do `infEvento` **não é reconhecido automaticamente** como um ID de verdade pelo
+     `libxml2` — precisa registrar explicitamente com `xmlsec.tree.add_ids(node, ["Id"])` antes de
+     assinar, ou a assinatura falha com um erro de XPointer/`xpointer(id(...))` não encontrado.
+  4. **`cOrgao` dentro do `infEvento` é sempre `91`** (código fixo do Ambiente Nacional) — **não** é a
+     UF da empresa nem a UF do emitente da nota. Usar a UF errada aqui dá `cStat 657`
+     ("Código do Órgão diverge do órgão autorizador").
 - **Segurança da assinatura em trânsito**: a chave privada nunca sai da máquina. O que trafega é o
   `SignatureValue` (resultado de mão única — não dá pra reconstruir a chave privada a partir dele)
   e o certificado **público** (`X509Certificate`, mesmo dado que já vimos com `openssl` na Fase 0).
   A conexão em si já é protegida por TLS/mTLS, como a consulta que já validamos.
 
+### ⚠️ A resposta vem em duas camadas — atenção ao parsear
+
+```xml
+<retEnvEvento>
+  <cStat>128</cStat>              <!-- status do LOTE, não do evento -->
+  <xMotivo>Lote de evento processado</xMotivo>
+  <retEvento>
+    <infEvento>
+      <cStat>135</cStat>          <!-- status do EVENTO em si — este é o que importa -->
+      <xMotivo>Evento registrado e vinculado a NF-e</xMotivo>
+      <nProt>...</nProt>
+    </infEvento>
+  </retEvento>
+</retEnvEvento>
+```
+
+Um parser ingênuo que pega só a **primeira** ocorrência de `<cStat>`/`<xMotivo>` no XML vai ler o status do **lote** (sempre `128` se o lote em si foi aceito), não o do evento. O status que decide sucesso/falha real está **aninhado** dentro de `retEvento > infEvento`. Descoberto na prática em 03/08/2026 — nosso primeiro teste real bateu nisso.
+
 ### `cStat` específicos deste webservice (diferente da consulta)
 
 | cStat | Significado | Ação |
 |---|---|---|
-| **135** | Evento registrado e vinculado à NF-e | **Único código tratado como sucesso** — segue e consulta de novo pra pegar o doc completo |
+| **135** | Evento registrado e vinculado à NF-e | **Único código tratado como sucesso** — segue e consulta de novo pra pegar o doc completo (confirmado: liberação é imediata) |
+| 128 | Lote de evento processado | ⚠️ Isso é o status do **lote**, não do evento — aparece sempre antes do `cStat` real (aninhado em `retEvento > infEvento`). Não confundir com sucesso do evento em si |
 | 136 | Evento registrado, mas **não vinculado** à NF-e | Parar e reportar — não é sucesso completo, algo não bateu |
 | 640 | Ciência não pode ocorrer depois de manifestação final já registrada | Parar e reportar |
 | 650 | Evento inválido pra nota cancelada/denegada | Parar e reportar |
+| 657 | Rejeição: Código do Órgão diverge do órgão autorizador | Bug nosso — `cOrgao` errado (corrigido: sempre `91`, não a UF da empresa) |
 
 Regra do projeto (decidida em 31/07/2026, "segurança em primeiro lugar"): **só o `cStat 135`
 é tratado como sucesso**. Qualquer outro código — incluindo os listados acima e qualquer coisa
