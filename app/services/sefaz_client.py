@@ -68,3 +68,25 @@ def extract_documents(xml_response: str) -> list[str]:
         compressed = base64.b64decode(encoded)
         documents.append(gzip.decompress(compressed).decode("utf-8"))
     return documents
+
+def get_full_document(access_key: str) -> str:
+    from app.services import manifestacao
+
+    raw_response = query_by_access_key(access_key)
+    parse_status(raw_response) # levanta SefazError se cStat != 138 (não achou nada)
+
+    documents = extract_documents(raw_response)
+    if not documents:
+        raise SefazError("Document found (cStat 138) but docZip was empty")
+    
+    document = documents[0]
+
+    if document.lstrip().startswith("<resNFe"):
+        manifestacao.send_awareness_event(access_key) 
+
+        raw_response = query_by_access_key(access_key)
+        parse_status(raw_response)
+        documents = extract_documents(raw_response)
+        document = documents[0]
+
+    return document
