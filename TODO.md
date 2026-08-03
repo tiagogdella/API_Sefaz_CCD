@@ -73,6 +73,7 @@ Marque cada item com `[x]` conforme for concluindo.
 - [ ] `POST /consultas/nfe` — recebe `{ chaveAcesso: string }`, devolve o JSON tratado (ou erro claro e padronizado)
 - [ ] Tratamento de erros HTTP consistente: certificado inválido/expirado, timeout de rede, nota não encontrada, chave malformada — sempre com corpo de erro previsível pro monolito conseguir tratar
 - [ ] Testes automatizados dos parsers usando XMLs de exemplo salvos localmente (sem depender de bater na SEFAZ real a cada rodada de teste)
+- [x] **`POST /consultas/xml`** (necessidade nova, 03/08/2026) — feito e testado: consulta + manifestação automática (função `get_full_document` em `sefaz_client.py`, reaproveitável pro `/consultas/nfe` também), devolve o **XML completo cru** (`nfeProc`) via `Response(media_type="application/xml")`. Base da aba "Consultar XML" do monolito pronta do lado da API
 
 ## Fase 4 — Integração com o monolito
 
