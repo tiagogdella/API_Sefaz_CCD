@@ -65,7 +65,7 @@ Marque cada item com `[x]` conforme for concluindo.
 - [x] Descompactar `docZip` — feito (`extract_documents`, base64 + gzip). **Ainda falta**: parsear o XML do `nfeProc` pra extrair estruturado (emitente, itens, valor total) — ver Fase 3, é o que falta pro `/consultas/nfe` virar "JSON tratado" de verdade
 - [ ] Tratar os casos de retorno sem sucesso da própria SEFAZ (cStat diferente de sucesso: nota não encontrada, chave inválida, ambiente errado) mapeando pra mensagens claras
 - [x] Implementar o envio do evento de **Manifestação do Destinatário** (`envEvento`/`RecepcaoEvento`, tipo "Ciência da Operação") — feito e validado com nota real em 03/08/2026: `cStat 135` (evento registrado) e a consulta seguinte já veio com `nfeProc` completo (5 itens, valores, impostos). Liberação foi **imediata**, sem espera. Detalhes técnicos (assinatura XML, `cOrgao=91` fixo, estrutura de resposta em duas camadas) em `docs/protocolo-sefaz.md`
-- [ ] Respeitar o intervalo mínimo de 1h entre novas consultas depois de um `cStat 137` (regra de uso indevido descoberta na Fase 0) — implementar esperando/avisando, não tratando como erro fatal
+- [x] Respeitar o intervalo mínimo de 1h entre novas consultas depois de "não encontrado" — implementado (`app/services/rate_limiter.py`): trava local em memória por `(cnpj, chave)`, bloqueia sem nem chamar a SEFAZ, devolve `429` (não erro fatal). Descobrimos no caminho mais dois códigos de "não encontrado" além do `137`/`640` (ver `docs/protocolo-sefaz.md`) — o cooldown agora registra pra qualquer resposta que não seja sucesso, não só os códigos catalogados, por segurança
 
 ## Fase 3 — Contrato da API (o que o monolito consome)
 
@@ -92,6 +92,9 @@ Marque cada item com `[x]` conforme for concluindo.
 
 ## Notas de decisão
 
+- **Múltiplos certificados/CNPJs**: ✅ implementado em 03/08/2026 — a empresa (contador) pode ter notas de 2 CNPJs diferentes (`della`/`migra`), então o serviço tenta cada certificado configurado (`get_certificate_profiles`) até achar a nota, sem escolha manual. Descoberta no caminho: `cStat 640` ("sem permissão pra consultar") também significa "não é desse CNPJ" na consulta — tratado igual ao `137` pra passar pro próximo certificado.
+  - ✅ Testado: caminho "achou de primeira" (nota da Della).
+  - ⚠️ Pendente: caminho de fallback ainda não confirmado de ponta a ponta — testamos com uma nota real da Migra e voltou "não encontrado" nos dois certificados. Foi a primeira consulta do certificado da Migra, então é bem provável ser o mesmo efeito de "primeiro acesso" da Fase 0 (nota fica disponível depois de um tempo). Assumimos que sim e seguimos — **retestar essa mesma chave (`42260845731998000132550010000016201009028410`) depois de ~1 dia**, respeitando o intervalo de 1h entre tentativas pra não contar como uso indevido.
 - **Idioma do código**: ✅ confirmado em 30/07/2026 — código, comentários, nomes de função/variável e mensagens de erro internas em **inglês** (mesma convenção do `controleDeCompra`); só o frontend (texto visível pro usuário) fica em português. Conversa entre nós continua em português.
 - **Linguagem**: ✅ decidido em 29/07/2026 — **Python**, isolado do monolito TypeScript. Vale a pena porque a integração depende de SOAP + assinatura XML + certificado PKCS12, área onde o ecossistema Python (`zeep`, `signxml`, `cryptography`, projetos de referência como `nfelib`) é bem mais maduro que o equivalente em Node. Comunicação entre os dois serviços é só HTTP/JSON, então a escolha de linguagem fica isolada e de baixo risco.
 - **Framework web**: sugestão **FastAPI** (ainda não confirmado com o usuário — trocar por Flask se preferir algo mais simples, não muda o resto do plano).

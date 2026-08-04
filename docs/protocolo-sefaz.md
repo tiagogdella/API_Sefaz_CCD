@@ -223,6 +223,9 @@ Confirmado testando na prática (Fase 0) + pesquisa complementar:
 | 137 | Nenhum documento localizado | Cair pro formulário manual; não tentar de novo antes de 1h |
 | 656 | Consumo indevido (bloqueio de 1h) | Avisar o usuário, aguardar; não é erro de bug |
 | 215 | Rejeição: falha no esquema XML | Bug no nosso envelope (aconteceu na Fase 0 por um namespace errado — corrigido) |
+| 217 | Rejeição: NF-e inexistente para a chave de acesso informada | Mais uma forma de "não encontrado" — tratado igual ao 137/640 (tenta o próximo certificado, registra cooldown) |
+| 236 | Rejeição: Chave de Acesso com dígito verificador inválido | Chave mal formada/digitada errado — não é erro da SEFAZ nem nosso, é a chave em si estando errada |
+| 640 (na consulta) | Rejeição: CNPJ/CPF do interessado não possui permissão pra consultar essa NF-e | ⚠️ Mesmo número do `640` da manifestação, **significado diferente** — aqui é "não é desse CNPJ", tratado igual a "não encontrado" |
 
 ## 6. Referências
 
