@@ -8,11 +8,13 @@ class Settings(BaseSettings):
     cert_della_password: str
     cert_della_cnpj: str
     cert_della_uf_autor: str = "42"
+    internal_api_key: str
 
     cert_migra_path: str
     cert_migra_password: str
     cert_migra_cnpj: str
     cert_migra_uf_autor: str = "42"
+    internal_api_key: str
 
     tp_amb: str = "1"
 

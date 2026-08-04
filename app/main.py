@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Depends
 from app.core.config import settings
 from app.schemas.nfe import NFeQueryRequest, NfeParsed
 from app.services import sefaz_client, nfe_parser, rate_limiter
+from app.core.auth import verify_api_key
 
 app = FastAPI(title="API Sefaz")
 
@@ -9,7 +10,7 @@ app = FastAPI(title="API Sefaz")
 def health():
     return {"status": "ok"}
 
-@app.post("/consultas/xml")
+@app.post("/consultas/xml", dependencies=[Depends(verify_api_key)])
 def query_xml(payload: NFeQueryRequest):
     try:
         xml_document, _ = sefaz_client.get_full_document_any_cnpj(payload.access_key)
@@ -23,7 +24,7 @@ def query_xml(payload: NFeQueryRequest):
     return Response(content=xml_document, media_type="application/xml")
 
 
-@app.post("/consultas/nfe", response_model=NfeParsed)
+@app.post("/consultas/nfe", response_model=NfeParsed, dependencies=[Depends(verify_api_key)])
 def query_nfe(payload: NFeQueryRequest):
     try:
         xml_document, profile_name = sefaz_client.get_full_document_any_cnpj(payload.access_key)
