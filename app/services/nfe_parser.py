@@ -6,7 +6,7 @@ NFE_NS = "http://www.portalfiscal.inf.br/nfe"
 NS = {"nfe": NFE_NS}
 
 
-def parse_nfe_proc(xml_document: str) -> NfeParsed:
+def parse_nfe_proc(xml_document: str, certificate_profile: str) -> NfeParsed:
     root = etree.fromstring(xml_document.encode("utf-8"))
     inf_nfe = root.find(".//nfe:infNFe", namespaces=NS)
 
@@ -39,4 +39,6 @@ def parse_nfe_proc(xml_document: str) -> NfeParsed:
         issue_date=issue_date,
         total_amount=float(total_amount),
         items=items,
+        certificate_profile=certificate_profile,
     )
+

@@ -1,12 +1,13 @@
-import re
-import requests
+from datetime import datetime
+
 import xmlsec
+import requests
 import requests_pkcs12
+import re
 
 from app.services.sefaz_client import SefazError
 from lxml import etree
-from datetime import datetime
-from app.core.config import settings
+from app.core.config import settings, CertificateProfile
 from app.services.certificate import load_certificate
 
 NFE_NS = "http://www.portalfiscal.inf.br/nfe"
@@ -17,11 +18,12 @@ _C_STAT_PATTERN = re.compile(r"<cStat>(\d+)</cStat>")
 _X_MOTIVO_PATTERN = re.compile(r"<xMotivo>(.*?)</xMotivo>")
 SUCCESS_CSTAT = "135"
 
+
 def _tag(name: str) -> str:
     return f"{{{NFE_NS}}}{name}"
 
 
-def build_awareness_event(access_key: str, sequence: int = 1) -> tuple[etree._Element, str]:
+def build_awareness_event(access_key: str, profile: CertificateProfile, sequence: int = 1) -> tuple[etree._Element, str]:
     event_id = f"ID{AWARENESS_EVENT_CODE}{access_key}{sequence:02d}"
     event_datetime = datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -39,7 +41,7 @@ def build_awareness_event(access_key: str, sequence: int = 1) -> tuple[etree._El
 
     etree.SubElement(inf_evento, _tag("cOrgao")).text = "91"
     etree.SubElement(inf_evento, _tag("tpAmb")).text = settings.tp_amb
-    etree.SubElement(inf_evento, _tag("CNPJ")).text = settings.cnpj
+    etree.SubElement(inf_evento, _tag("CNPJ")).text = profile.cnpj
     etree.SubElement(inf_evento, _tag("chNFe")).text = access_key
     etree.SubElement(inf_evento, _tag("dhEvento")).text = event_datetime
     etree.SubElement(inf_evento, _tag("tpEvento")).text = AWARENESS_EVENT_CODE
@@ -60,7 +62,7 @@ def build_awareness_event(access_key: str, sequence: int = 1) -> tuple[etree._El
     key_info = xmlsec.template.ensure_key_info(signature_node)
     xmlsec.template.add_x509_data(key_info)
 
-    private_key_pem, certificate_pem = load_certificate()
+    private_key_pem, certificate_pem = load_certificate(profile)
 
     key = xmlsec.Key.from_memory(private_key_pem, xmlsec.KeyFormat.PEM)
     key.load_cert_from_memory(certificate_pem, xmlsec.KeyFormat.CERT_PEM)
@@ -72,15 +74,16 @@ def build_awareness_event(access_key: str, sequence: int = 1) -> tuple[etree._El
 
     return env_evento, event_id
 
-def send_awareness_event(access_key: str, sequence: int = 1) -> tuple[str, str]:
-    env_evento, _ = build_awareness_event(access_key, sequence)
+
+def send_awareness_event(access_key: str, profile: CertificateProfile, sequence: int = 1) -> tuple[str, str]:
+    env_evento, _ = build_awareness_event(access_key, profile, sequence)
     evento_xml = etree.tostring(env_evento).decode()
 
     envelope = f"""<?xml version="1.0" encoding="UTF-8"?>
 <soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Header>
     <nfeCabecMsg xmlns="{RECEPCAO_EVENTO_NS}">
-      <cUF>{settings.uf_autor}</cUF>
+      <cUF>{profile.uf_autor}</cUF>
       <versaoDados>1.00</versaoDados>
     </nfeCabecMsg>
   </soap12:Header>
@@ -97,8 +100,8 @@ def send_awareness_event(access_key: str, sequence: int = 1) -> tuple[str, str]:
         resp = requests_pkcs12.post(
             RECEPCAO_EVENTO_URL,
             data=envelope.encode("utf-8"),
-            pkcs12_filename=settings.cert_path,
-            pkcs12_password=settings.cert_password,
+            pkcs12_filename=profile.cert_path,
+            pkcs12_password=profile.cert_password,
             headers=headers,
             timeout=30,
         )
@@ -111,8 +114,6 @@ def send_awareness_event(access_key: str, sequence: int = 1) -> tuple[str, str]:
     if not c_stat_matches or not x_motivo_matches:
         raise SefazError(f"Could not parse cStat/xMotivo from manifestacao response. Raw: {resp.text[:1500]}")
 
-    # A resposta vem em duas camadas (lote + evento) — o último cStat/xMotivo
-    # é o do evento em si, que é o que decide sucesso/falha real.
     c_stat = c_stat_matches[-1]
     x_motivo = x_motivo_matches[-1]
 
