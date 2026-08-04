@@ -63,7 +63,7 @@ Marque cada item com `[x]` conforme for concluindo.
 - [x] Cliente SOAP: envelope manual com `requests`/`requests_pkcs12` (não usamos `zeep` — o envelope da consulta é simples o suficiente pra montar na mão, sem depender de parsing de WSDL)
 - [x] Função `query_by_access_key` (`app/services/sefaz_client.py`) — monta o `consChNFe`, envia e recebe a resposta
 - [x] Descompactar `docZip` — feito (`extract_documents`, base64 + gzip). **Ainda falta**: parsear o XML do `nfeProc` pra extrair estruturado (emitente, itens, valor total) — ver Fase 3, é o que falta pro `/consultas/nfe` virar "JSON tratado" de verdade
-- [ ] Tratar os casos de retorno sem sucesso da própria SEFAZ (cStat diferente de sucesso: nota não encontrada, chave inválida, ambiente errado) mapeando pra mensagens claras
+- [x] Tratar os casos de retorno sem sucesso da própria SEFAZ — `SefazNotFoundError`/`SefazError`, `cStat` mapeado (137/640/217 = não encontrado, resto = erro)
 - [x] Implementar o envio do evento de **Manifestação do Destinatário** (`envEvento`/`RecepcaoEvento`, tipo "Ciência da Operação") — feito e validado com nota real em 03/08/2026: `cStat 135` (evento registrado) e a consulta seguinte já veio com `nfeProc` completo (5 itens, valores, impostos). Liberação foi **imediata**, sem espera. Detalhes técnicos (assinatura XML, `cOrgao=91` fixo, estrutura de resposta em duas camadas) em `docs/protocolo-sefaz.md`
 - [x] Respeitar o intervalo mínimo de 1h entre novas consultas depois de "não encontrado" — implementado (`app/services/rate_limiter.py`): trava local em memória por `(cnpj, chave)`, bloqueia sem nem chamar a SEFAZ, devolve `429` (não erro fatal). Descobrimos no caminho mais dois códigos de "não encontrado" além do `137`/`640` (ver `docs/protocolo-sefaz.md`) — o cooldown agora registra pra qualquer resposta que não seja sucesso, não só os códigos catalogados, por segurança
 
@@ -71,14 +71,14 @@ Marque cada item com `[x]` conforme for concluindo.
 
 - [x] Definir o schema Pydantic da resposta — `NfeParsed`/`NfeItem` (`app/schemas/nfe.py`): fornecedor, CNPJ, data de emissão, valor total, lista de itens (código, descrição, quantidade, unidade, valor unitário, valor total)
 - [x] `POST /consultas/nfe` — recebe `{ accessKey: string }`, devolve o JSON tratado com itens — testado com nota real, veio limpo e completo (03/08/2026)
-- [ ] Tratamento de erros HTTP consistente: certificado inválido/expirado, timeout de rede, nota não encontrada, chave malformada — sempre com corpo de erro previsível pro monolito conseguir tratar
-- [ ] Testes automatizados dos parsers usando XMLs de exemplo salvos localmente (sem depender de bater na SEFAZ real a cada rodada de teste)
+- [x] Tratamento de erros HTTP consistente — `404` (não encontrado), `429` (aguarde/uso indevido), `502` (erro genérico SEFAZ/certificado), `422` (chave malformada, automático do Pydantic)
+- [x] Testes automatizados dos parsers — `tests/test_nfe_parser.py`, XML de exemplo salvo em `tests/fixtures/`
 - [x] **`POST /consultas/xml`** (necessidade nova, 03/08/2026) — feito e testado: consulta + manifestação automática (função `get_full_document` em `sefaz_client.py`, reaproveitável pro `/consultas/nfe` também), devolve o **XML completo cru** (`nfeProc`) via `Response(media_type="application/xml")`. Base da aba "Consultar XML" do monolito pronta do lado da API
 
 ## Fase 4 — Integração com o monolito
 
 - [ ] Subir o serviço no `docker-compose.yml` da raiz (`sistema_de_compras`), na mesma rede interna do `controleDeCompra`, sem expor porta pra fora
-- [ ] Decidir autenticação entre serviços (API key simples num header, já que é rede interna — não precisa de algo mais pesado)
+- [x] Autenticação entre serviços — API key simples (`X-API-Key`), testada e funcionando (`app/core/auth.py`)
 - [ ] No backend do monolito, criar o client HTTP que chama `POST /consultas/nfe` do `API_Sefaz` e mapeia a resposta pro fluxo de pré-preenchimento do formulário (reaproveitando o padrão de `supplierPicker.create`/`productPicker.create` já usado no lançamento manual)
 - [ ] Teste ponta a ponta: escanear/informar uma chave real no frontend → monolito chama `API_Sefaz` → formulário pré-preenchido
 
