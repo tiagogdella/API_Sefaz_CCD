@@ -55,7 +55,7 @@ def query_by_access_key(access_key: str, profile: CertificateProfile) -> str:
             headers=headers,
             timeout=30,
         )
-    except requests.exceptions.RequestException as e:
+    except (requests.exceptions.RequestException, FileNotFoundError, ValueError) as e:
         raise SefazError(f"Connection error with SEFAZ: {e}") from e
 
     return resp.text

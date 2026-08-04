@@ -15,6 +15,8 @@ def query_xml(payload: NFeQueryRequest):
         xml_document, _ = sefaz_client.get_full_document_any_cnpj(payload.access_key)
     except rate_limiter.RateLimitError as e:
         raise HTTPException(status_code=429, detail=str(e)) from e
+    except sefaz_client.SefazNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except sefaz_client.SefazError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
@@ -27,6 +29,8 @@ def query_nfe(payload: NFeQueryRequest):
         xml_document, profile_name = sefaz_client.get_full_document_any_cnpj(payload.access_key)
     except rate_limiter.RateLimitError as e:
         raise HTTPException(status_code=429, detail=str(e)) from e
+    except sefaz_client.SefazNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except sefaz_client.SefazError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
