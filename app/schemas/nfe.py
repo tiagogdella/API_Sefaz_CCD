@@ -32,3 +32,4 @@ class NfeParsed(BaseModel):
     issue_date: str
     total_amount: float
     items: list[NfeItem]
+    certificate_profile: str
