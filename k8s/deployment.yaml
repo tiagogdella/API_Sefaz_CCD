@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sefaz
+  namespace: comprassularroz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sefaz
+  template:
+    metadata:
+      labels:
+        app: sefaz
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: sefaz
+          image: ghcr.io/tiagogdella/comprassularroz-sefaz:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: CERT_DELLA_PATH
+              value: /certs/della.pfx
+            - name: CERT_MIGRA_PATH
+              value: /certs/migra.pfx
+            - name: CERT_DELLA_UF_AUTOR
+              value: "42"
+            - name: CERT_MIGRA_UF_AUTOR
+              value: "42"
+            - name: TP_AMB
+              value: "1"
+            - name: CERT_DELLA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sefaz-secrets
+                  key: CERT_DELLA_PASSWORD
+            - name: CERT_DELLA_CNPJ
+              valueFrom:
+                secretKeyRef:
+                  name: sefaz-secrets
+                  key: CERT_DELLA_CNPJ
+            - name: CERT_MIGRA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sefaz-secrets
+                  key: CERT_MIGRA_PASSWORD
+            - name: CERT_MIGRA_CNPJ
+              valueFrom:
+                secretKeyRef:
+                  name: sefaz-secrets
+                  key: CERT_MIGRA_CNPJ
+            - name: INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sefaz-secrets
+                  key: INTERNAL_API_KEY
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: certs
+          secret:
+            secretName: sefaz-certs
