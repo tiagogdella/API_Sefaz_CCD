@@ -11,6 +11,7 @@ def parse_nfe_proc(xml_document: str, certificate_profile: str) -> NfeParsed:
     inf_nfe = root.find(".//nfe:infNFe", namespaces=NS)
 
     access_key = inf_nfe.get("Id").replace("NFe", "")
+    invoice_number = inf_nfe.findtext("nfe:ide/nfe:nNF", namespaces=NS)
     issue_date = inf_nfe.findtext("nfe:ide/nfe:dhEmi", namespaces=NS)
     total_amount = inf_nfe.findtext("nfe:total/nfe:ICMSTot/nfe:vNF", namespaces=NS)
 
@@ -34,6 +35,7 @@ def parse_nfe_proc(xml_document: str, certificate_profile: str) -> NfeParsed:
 
     return NfeParsed(
         access_key=access_key,
+        invoice_number=invoice_number,        
         supplier_cnpj=supplier_cnpj,
         supplier_name=supplier_name,
         issue_date=issue_date,

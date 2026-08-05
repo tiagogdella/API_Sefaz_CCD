@@ -27,6 +27,7 @@ class NfeItem(BaseModel):
 
 class NfeParsed(BaseModel):
     access_key: str
+    invoice_number: str
     supplier_cnpj: str
     supplier_name: str
     issue_date: str
