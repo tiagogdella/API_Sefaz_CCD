@@ -77,7 +77,7 @@ Marque cada item com `[x]` conforme for concluindo.
 
 ## Fase 4 — Integração com o monolito
 
-- [ ] Subir o serviço no `docker-compose.yml` da raiz (`sistema_de_compras`), na mesma rede interna do `controleDeCompra`, sem expor porta pra fora
+- [x] Serviço rodando em produção no k3s (namespace `comprassularroz`), sem porta exposta pra fora — manifests versionados em `API_Sefaz/k8s/`. Certificados via Secret de arquivo (`sefaz-certs`), senhas/CNPJ/API key via Secret de texto (`sefaz-secrets`). Testado ponta a ponta (05/08/2026): frontend → backend → `sefaz` → SEFAZ real
 - [x] Autenticação entre serviços — API key simples (`X-API-Key`), testada e funcionando (`app/core/auth.py`)
 - [ ] No backend do monolito, criar o client HTTP que chama `POST /consultas/nfe` do `API_Sefaz` e mapeia a resposta pro fluxo de pré-preenchimento do formulário (reaproveitando o padrão de `supplierPicker.create`/`productPicker.create` já usado no lançamento manual)
 - [ ] Teste ponta a ponta: escanear/informar uma chave real no frontend → monolito chama `API_Sefaz` → formulário pré-preenchido
@@ -85,7 +85,7 @@ Marque cada item com `[x]` conforme for concluindo.
 ## Fase 5 — Polish
 
 - [ ] Logs estruturados (sem logar a senha do certificado ou o conteúdo sensível da nota em texto puro)
-- [ ] `Dockerfile` de produção (imagem Python enxuta, ex: `python:3.12-slim`)
+- [x] `Dockerfile` de produção — `python:3.10-slim`, multi-stage, com `libxmlsec1-openssl` e o `openssl_legacy.cnf` embutido (SHA1 legado). Testado local com `docker run`, funcionando ponta a ponta (inclusive assinatura da manifestação)
 - [ ] README do serviço: como rodar local, como configurar o certificado, variáveis de ambiente
 
 ---
