@@ -79,12 +79,12 @@ Marque cada item com `[x]` conforme for concluindo.
 
 - [x] Serviço rodando em produção no k3s (namespace `comprassularroz`), sem porta exposta pra fora — manifests versionados em `API_Sefaz/k8s/`. Certificados via Secret de arquivo (`sefaz-certs`), senhas/CNPJ/API key via Secret de texto (`sefaz-secrets`). Testado ponta a ponta (05/08/2026): frontend → backend → `sefaz` → SEFAZ real
 - [x] Autenticação entre serviços — API key simples (`X-API-Key`), testada e funcionando (`app/core/auth.py`)
-- [ ] No backend do monolito, criar o client HTTP que chama `POST /consultas/nfe` do `API_Sefaz` e mapeia a resposta pro fluxo de pré-preenchimento do formulário (reaproveitando o padrão de `supplierPicker.create`/`productPicker.create` já usado no lançamento manual)
-- [ ] Teste ponta a ponta: escanear/informar uma chave real no frontend → monolito chama `API_Sefaz` → formulário pré-preenchido
+- [x] Client HTTP no backend do monolito (`sefaz.service.ts`) chamando `/consultas/nfe`, com auto-cadastro de fornecedor (por CNPJ) e produto (por nome) reaproveitando `supplierPicker.create`/`productPicker.create`
+- [x] Teste ponta a ponta com nota real, em produção (05-06/08/2026) — inclusive achou e corrigiu um bug real de desconto por item (`vDesc`) comparando com a nota física
 
 ## Fase 5 — Polish
 
-- [ ] Logs estruturados (sem logar a senha do certificado ou o conteúdo sensível da nota em texto puro)
+- [x] Logs estruturados (JSON, `app/core/logging_config.py`) — só identificadores (`access_key`, `profile`, `cStat`), nunca senha de certificado nem conteúdo da nota
 - [x] `Dockerfile` de produção — `python:3.10-slim`, multi-stage, com `libxmlsec1-openssl` e o `openssl_legacy.cnf` embutido (SHA1 legado). Testado local com `docker run`, funcionando ponta a ponta (inclusive assinatura da manifestação)
 - [x] README do serviço (em inglês, seguindo a convenção do projeto): setup local, variáveis de ambiente, endpoints, deploy
 
