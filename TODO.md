@@ -86,7 +86,7 @@ Marque cada item com `[x]` conforme for concluindo.
 
 - [ ] Logs estruturados (sem logar a senha do certificado ou o conteúdo sensível da nota em texto puro)
 - [x] `Dockerfile` de produção — `python:3.10-slim`, multi-stage, com `libxmlsec1-openssl` e o `openssl_legacy.cnf` embutido (SHA1 legado). Testado local com `docker run`, funcionando ponta a ponta (inclusive assinatura da manifestação)
-- [ ] README do serviço: como rodar local, como configurar o certificado, variáveis de ambiente
+- [x] README do serviço (em inglês, seguindo a convenção do projeto): setup local, variáveis de ambiente, endpoints, deploy
 
 ---
 
