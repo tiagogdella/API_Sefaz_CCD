@@ -22,14 +22,22 @@ def parse_nfe_proc(xml_document: str, certificate_profile: str) -> NfeParsed:
     items = []
     for det in inf_nfe.findall("nfe:det", namespaces=NS):
         prod = det.find("nfe:prod", namespaces=NS)
+
+        quantity = float(prod.findtext("nfe:qCom", namespaces=NS))
+        gross_total = float(prod.findtext("nfe:vProd", namespaces=NS))
+        discount_text = prod.findtext("nfe:vDesc", namespaces=NS)
+        discount = float(discount_text) if discount_text else 0.0
+        net_total = gross_total - discount
+        net_unit_price = net_total / quantity if quantity else 0.0
+
         items.append(
             NfeItem(
                 code=prod.findtext("nfe:cProd", namespaces=NS),
                 description=prod.findtext("nfe:xProd", namespaces=NS),
-                quantity=float(prod.findtext("nfe:qCom", namespaces=NS)),
+                quantity=quantity,
                 unit=prod.findtext("nfe:uCom", namespaces=NS),
-                unit_price=float(prod.findtext("nfe:vUnCom", namespaces=NS)),
-                total_price=float(prod.findtext("nfe:vProd", namespaces=NS)),
+                unit_price=net_unit_price,
+                total_price=net_total,
             )
         )
 
