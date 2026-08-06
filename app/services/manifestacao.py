@@ -1,14 +1,15 @@
-from datetime import datetime
-
 import xmlsec
 import requests
 import requests_pkcs12
 import re
+import logging
 
+from datetime import datetime
 from app.services.sefaz_client import SefazError
 from lxml import etree
 from app.core.config import settings, CertificateProfile
 from app.services.certificate import load_certificate
+from app.core.logging_config import log_event
 
 NFE_NS = "http://www.portalfiscal.inf.br/nfe"
 AWARENESS_EVENT_CODE = "210210"
@@ -17,6 +18,7 @@ RECEPCAO_EVENTO_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4
 _C_STAT_PATTERN = re.compile(r"<cStat>(\d+)</cStat>")
 _X_MOTIVO_PATTERN = re.compile(r"<xMotivo>(.*?)</xMotivo>")
 SUCCESS_CSTAT = "135"
+logger = logging.getLogger("manifestacao")
 
 
 def _tag(name: str) -> str:
@@ -116,6 +118,8 @@ def send_awareness_event(access_key: str, profile: CertificateProfile, sequence:
 
     c_stat = c_stat_matches[-1]
     x_motivo = x_motivo_matches[-1]
+
+    log_event(logger, logging.INFO, "manifestacao result", access_key=access_key, profile=profile.name, c_stat=c_stat)
 
     if c_stat != SUCCESS_CSTAT:
         raise SefazError(f"Manifestacao rejected or incomplete (cStat={c_stat}): {x_motivo}")

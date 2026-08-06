@@ -3,6 +3,9 @@ from app.core.config import settings
 from app.schemas.nfe import NFeQueryRequest, NfeParsed
 from app.services import sefaz_client, nfe_parser, rate_limiter
 from app.core.auth import verify_api_key
+from app.core.logging_config import configure_logging
+
+configure_logging()
 
 app = FastAPI(title="API Sefaz")
 

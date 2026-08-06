@@ -3,16 +3,18 @@ import requests_pkcs12
 import re
 import base64
 import gzip
+import logging
 
 from app.services import rate_limiter
 from app.core.config import settings, CertificateProfile
+from app.core.logging_config import log_event
 
 URL = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx"
 VERSION = "1.01"
 _C_STAT_PATTERN = re.compile(r"<cStat>(\d+)</cStat>")
 _X_MOTIVO_PATTERN = re.compile(r"<xMotivo>(.*?)</xMotivo>")
 _DOC_ZIP_PATTERN = re.compile(r"<docZip[^>]*>(.*?)</docZip>", re.DOTALL)
-
+logger = logging.getLogger("sefaz_client")
 
 class SefazError(Exception):
     """Connection/network error, or an unexpected/failed response from SEFAZ."""
@@ -87,6 +89,7 @@ def get_full_document(access_key: str, profile: CertificateProfile) -> str:
 
     raw_response = query_by_access_key(access_key, profile)
     c_stat, x_motivo = parse_status(raw_response)   
+    log_event(logger, logging.INFO, "sefaz query result", access_key=access_key, profile=profile.name, c_stat=c_stat)
 
     if c_stat != "138":
         rate_limiter.register_not_found(profile.cnpj, access_key)
@@ -101,10 +104,12 @@ def get_full_document(access_key: str, profile: CertificateProfile) -> str:
     document = documents[0]
 
     if document.lstrip().startswith("<resNFe"):
+        log_event(logger, logging.INFO, "sending manifestacao", access_key=access_key, profile=profile.name)
         manifestacao.send_awareness_event(access_key, profile)
 
         raw_response = query_by_access_key(access_key, profile)
         c_stat, x_motivo = parse_status(raw_response)
+        log_event(logger, logging.INFO, "sefaz query result after manifestacao", access_key=access_key, profile=profile.name, c_stat=c_stat)
         if c_stat != "138":
             raise SefazError(f"Unexpected cStat after manifestacao {c_stat}: {x_motivo}")
 
@@ -123,6 +128,8 @@ def get_full_document_any_cnpj(access_key: str) -> tuple[str, str]:
             document = get_full_document(access_key, profile)
             return document, profile.name
         except SefazNotFoundError:
+            log_event(logger, logging.INFO, "not found for profile, trying next", access_key=access_key, profile=profile.name)
             continue
 
+    log_event(logger, logging.WARNING, "access key not found for any cnpj", access_key=access_key)
     raise SefazNotFoundError(f"Access key {access_key} not found for any configured CNPJ")
