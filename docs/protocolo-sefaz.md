@@ -227,6 +227,20 @@ Confirmado testando na prática (Fase 0) + pesquisa complementar:
 | 236 | Rejeição: Chave de Acesso com dígito verificador inválido | Chave mal formada/digitada errado — não é erro da SEFAZ nem nosso, é a chave em si estando errada |
 | 640 (na consulta) | Rejeição: CNPJ/CPF do interessado não possui permissão pra consultar essa NF-e | ⚠️ Mesmo número do `640` da manifestação, **significado diferente** — aqui é "não é desse CNPJ", tratado igual a "não encontrado" |
 
+## 5.5. Desconto por item (`vDesc`) — descoberto com nota real (05/08/2026)
+
+Cada `<det><prod>` pode ter um `<vDesc>` (desconto daquele item específico, opcional — só existe
+quando tem desconto). `vProd` é sempre o valor **bruto** (`qCom × vUnCom`), sem descontar isso.
+Pra bater com o que aparece na nota física (e com o `vNF` total), é preciso subtrair:
+
+```
+total_price = vProd - vDesc (ou vProd, se não tiver vDesc)
+unit_price  = total_price / qCom
+```
+
+Sem isso, o total somado dos itens fica **maior** que o total oficial da nota — foi assim que
+percebemos o problema (uma nota real com R$26 de diferença entre a soma dos itens e o `vNF`).
+
 ## 6. Referências
 
 - [Nota Técnica 2014.002 — Web Service de Distribuição de DF-e (portal oficial NF-e)](https://www.nfe.fazenda.gov.br/portal/exibirArquivo.aspx?conteudo=wLVBlKchUb4%3D)
