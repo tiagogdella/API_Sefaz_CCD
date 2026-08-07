@@ -181,6 +181,7 @@ Um parser ingênuo que pega só a **primeira** ocorrência de `<cStat>`/`<xMotiv
 | 136 | Evento registrado, mas **não vinculado** à NF-e | Parar e reportar — não é sucesso completo, algo não bateu |
 | 640 | Ciência não pode ocorrer depois de manifestação final já registrada | Parar e reportar |
 | 650 | Evento inválido pra nota cancelada/denegada | Parar e reportar |
+| 596 | Rejeição: Evento apresentado fora do prazo | **Cuidado**: não é o prazo de 90 dias (esse é outra coisa — a janela de distribuição do XML). A **Ciência da Operação especificamente tem só 10 dias** da autorização da nota. Confirmado na prática em 07/08/2026 com nota de 29 dias. Sem manifestar a tempo, fica só no resumo pra sempre; não adianta tentar outro certificado, o prazo é da nota, não do CNPJ. Prazos completos por evento: Ciência/Desconhecimento = 10 dias, Confirmação = 20 dias (da circulação da mercadoria), Operação Não Realizada = 180 dias |
 | 657 | Rejeição: Código do Órgão diverge do órgão autorizador | Bug nosso — `cOrgao` errado (corrigido: sempre `91`, não a UF da empresa) |
 
 Regra do projeto (decidida em 31/07/2026, "segurança em primeiro lugar"): **só o `cStat 135`
