@@ -1,7 +1,7 @@
 # Arquitetura Geral — Sistema de Compras
 
 Visão de alto nível de como o **monolito `controleDeCompra`** (TypeScript) e o **serviço `API_Sefaz`**
-(Python) se encaixam, e como tudo roda em produção. Atualizado em 06/08/2026.
+(Python) se encaixam, e como tudo roda em produção. Atualizado em 07/08/2026.
 
 ---
 
@@ -18,7 +18,6 @@ flowchart TB
         Frontend["frontend/\nVite + Vue 3 + Nginx"]
         Backend["backend/\nExpress + Prisma"]
         Postgres[("Postgres")]
-        AI["Gemini API\n(sugestão de categoria de produto)"]
     end
 
     subgraph API_Sefaz["API_Sefaz (Python)"]
@@ -28,12 +27,15 @@ flowchart TB
     end
 
     SEFAZ["SEFAZ — Ambiente Nacional\nNFeDistribuicaoDFe + NFeRecepcaoEvento4"]
+    Groq["Groq API (LLM)\ncategoria de produto + relatório de preço"]
+    MercadoLivre["Mercado Livre\nbusca pública de preços\n(bloqueada externamente no momento)"]
 
     Scanner -->|"chave de 44 dígitos"| Browser
     Browser <-->|HTTP/JSON| Frontend
     Frontend <-->|"REST API (/api)"| Backend
     Backend <-->|Prisma| Postgres
-    Backend -.->|"sugestão de categoria\n(produto novo)"| AI
+    Backend -.->|"POST /ai/suggest-category\nPOST /ai/price-report"| Groq
+    Backend -.->|"5 anúncios mais baratos"| MercadoLivre
     Backend -->|"POST, X-API-Key\n(rede interna k8s)"| FastAPI
     FastAPI --> SefazClient
     SefazClient -.->|carrega uma vez| Certs
@@ -97,6 +99,8 @@ sequenceDiagram
     participant Backend as Backend (monolito)
     participant Sefaz as API_Sefaz
     participant SefazGov as SEFAZ (Ambiente Nacional)
+    participant Groq
+    participant ML as Mercado Livre
 
     Usuário->>Frontend: escaneia código de barras/QR
     Frontend->>Frontend: valida formato (44 dígitos + dígito verificador módulo 11)
@@ -115,10 +119,30 @@ sequenceDiagram
 
     Sefaz-->>Backend: JSON (emitente, itens líquidos, totais)
     Backend-->>Frontend: pré-preenche formulário
-    Backend-->>Backend: auto-cadastra fornecedor/produtos que não existem
-    opt produto novo
-        Backend->>AI: sugestão de categoria (Gemini)
+
+    loop por item da nota (no frontend)
+        Frontend->>Frontend: produto já cadastrado? (match por nome)
+        opt produto novo
+            Frontend->>Backend: POST /ai/suggest-category
+            Backend->>Groq: sugere categoria
+            Groq-->>Backend: categoria (ou falha)
+            Backend-->>Frontend: categoria, com fallback "Não classificado"
+            Frontend->>Backend: POST /products
+        end
     end
+
+    par selos de preço em background, não bloqueiam a revisão
+        loop por item, sequencial (respeita rate limit do Groq)
+            Frontend->>Backend: POST /ai/price-report
+            Backend->>Backend: histórico do produto (Prisma)
+            Backend->>ML: 5 anúncios mais baratos
+            ML-->>Backend: preços (ou 403, ver decisões registradas)
+            Backend->>Groq: veredito + texto (só dados reais, IA nunca "lembra" preço)
+            Groq-->>Backend: { verdict, text }
+            Backend-->>Frontend: selo colorido + tooltip
+        end
+    end
+
     Usuário->>Frontend: revisa e confirma
     Frontend->>Backend: POST /purchases
 ```
@@ -154,7 +178,7 @@ configurado automaticamente, sem o usuário escolher qual.
 | Webservice nacional `NFeDistribuicaoDFe` em vez de raspar HTML da SEFAZ-SC | `controleDeCompra/TODO.md` (Semana 8) |
 | Suporte a múltiplos CNPJs com detecção automática | `API_Sefaz/TODO.md` |
 | Deploy em k3s (não docker-compose) com Secrets de arquivo pros certificados | `API_Sefaz/TODO.md`, `docs/deploy.md` (monolito) |
-| Categorização de produto por IA (Gemini, tier gratuito) — sem MCP aqui, MCP é projeto separado | `controleDeCompra/TODO.md` |
+| Categorização de produto + alerta de preço por IA — Groq (trocado do Gemini em 07/08/2026, que passou a exigir R$200 de pré-pagamento pra liberar a cota gratuita); Mercado Livre como fonte externa de preço, atualmente bloqueado (403) do lado deles — sem MCP aqui, MCP é projeto separado | `controleDeCompra/TODO.md` |
 
 ## 6. Referências
 
