@@ -6,9 +6,10 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
             "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
-            "level": record.name,
+            "level": record.levelname,
+            "logger": record.name,
             "message": record.getMessage(),
-        }
+        } 
         if hasattr(record, "context"):
             payload.update(record.context)
         return json.dumps(payload)
