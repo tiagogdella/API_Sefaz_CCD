@@ -10,9 +10,11 @@ Supports multiple CNPJ certificates (`della`, `migra`) — a lookup automaticall
 configured certificate until it finds the document, with no manual selection required.
 
 📄 Deeper documentation (with Mermaid diagrams): [`docs/arquitetura-geral.md`](../docs/arquitetura-geral.md)
-(how this fits with the monolith), [`docs/protocolo-sefaz.md`](docs/protocolo-sefaz.md) (SEFAZ
-protocol details, rate limits, gotchas), [`docs/estrutura-do-projeto.md`](docs/estrutura-do-projeto.md)
-(folder-by-folder map) and [`TODO.md`](TODO.md) (roadmap and decision log).
+(how this fits with the monolith), [`docs/protocolo-sefaz.md`](docs/protocolo-sefaz.md) (NF-e
+protocol details, rate limits, gotchas), [`docs/protocolo-cte-sefaz.md`](docs/protocolo-cte-sefaz.md)
+(CT-e protocol details — different national endpoint, no direct key lookup),
+[`docs/estrutura-do-projeto.md`](docs/estrutura-do-projeto.md) (folder-by-folder map) and
+[`TODO.md`](TODO.md) / [`TODOCTE.md`](TODOCTE.md) (roadmap and decision log).
 
 ## Requirements
 
@@ -80,11 +82,13 @@ All endpoints except `/health` require the `X-API-Key` header.
 | `GET /health` | Liveness/readiness check, no auth |
 | `POST /consultas/nfe` | Body `{ "accessKey": "<44 digits>" }` — queries SEFAZ (trying each configured certificate), sends the manifestação event automatically if only a summary is available yet, and returns parsed JSON (supplier, items, totals) |
 | `POST /consultas/xml` | Same lookup, but returns the raw signed `nfeProc` XML for download instead of parsed JSON |
+| `POST /consultas/cte/xml` | Body `{ "accessKey": "<44 digits, model 57 or 67>" }` — CT-e (freight) lookup, company as tomadora. Returns the raw signed `cteProc` XML. **Different national webservice/URL than NF-e** (`www1.cte.fazenda.gov.br`, not `www1.nfe.fazenda.gov.br`) — relevant if debugging network/firewall issues in production. No structured-JSON variant yet (XML only, by design) |
 
-Both endpoints raise:
+All three query endpoints raise:
 - `404` — key not found for any configured CNPJ
 - `429` — local cooldown active (avoids triggering SEFAZ's own anti-abuse block; wait ~1h)
 - `502` — connection/certificate error, or an unexpected SEFAZ rejection
+- `422` — malformed access key (wrong length, non-numeric, or wrong document model for that endpoint)
 
 ## Deployment
 

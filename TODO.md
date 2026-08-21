@@ -88,6 +88,37 @@ Marque cada item com `[x]` conforme for concluindo.
 - [x] `Dockerfile` de produção — `python:3.10-slim`, multi-stage, com `libxmlsec1-openssl` e o `openssl_legacy.cnf` embutido (SHA1 legado). Testado local com `docker run`, funcionando ponta a ponta (inclusive assinatura da manifestação)
 - [x] README do serviço (em inglês, seguindo a convenção do projeto): setup local, variáveis de ambiente, endpoints, deploy
 
+## Fase 6 — CT-e (consulta de conhecimento de transporte, empresa como tomadora)
+
+> Demanda nova do contador, plano completo (achados, decisões, testes passo a passo) documentado
+> em [`TODOCTE.md`](TODOCTE.md) — aqui só o resumo executivo, no mesmo formato de checklist.
+
+- [x] **Fase 0 (pesquisa + validação empírica)**: webservice nacional `CTeDistribuicaoDFe`
+      confirmado — mas sem consulta direta por chave (`consChCTe` não existe), só `distNSU`
+      (paginação client-side). Teste real contra produção em 21/08/2026 confirmou namespace,
+      versão, `cUFAutor` e formato da chave (`Id="CTe..."`) de primeira. Manifestação do tomador
+      fica **sem confirmação 100%** (ver `TODOCTE.md`/`protocolo-cte-sefaz.md` pro porquê) —
+      contornado com checagem defensiva em vez de suposição
+- [x] **Fase 1 (`app/services/cte_client.py`)**: paginação por `distNSU`, `get_full_document`/
+      `get_full_document_any_cnpj` espelhando `sefaz_client.py`. Testado via REPL contra produção:
+      achou a chave-alvo no perfil della, `cteProc` completo (8863 caracteres)
+- [x] **Fase 2 (`POST /consultas/cte/xml`)**: novo endpoint, mesmo padrão de erro dos endpoints de
+      NF-e (`404`/`429`/`502`/`422`). Testado via `curl` contra produção: `200` com chave válida
+      de CT-e, `422` com chave de NF-e (modelo errado, rejeitada antes de consultar a SEFAZ)
+- [x] **Fase 3 (testes automatizados)**: `tests/test_cte_schema.py` + `tests/test_cte_client.py`,
+      10 testes novos, `python -m pytest` completo (NF-e + CT-e) passando — 13 testes, sem rede
+- [x] **Fase 4 (documentação)**: [`docs/protocolo-cte-sefaz.md`](docs/protocolo-cte-sefaz.md)
+      (novo), esta seção do `TODO.md`, `docs/estrutura-do-projeto.md` e `README.md` atualizados
+- [x] **Fase 5 (deploy/config)**: confirmado sem mudança em `.env`/`k8s/deployment.yaml` — mesmos
+      certificados della/migra servem pro papel de tomador, nenhuma dependência Python nova. Falta
+      só o deploy real (build + push + rollout), rotina de deploy, não trabalho de configuração
+
+**Resultado do teste real (21/08/2026)**: chave `43260830800793000275570040000013051150732250`
+(CT-e emitido 12/08/2026, transportadora NIVIA TRANSPORTES, frete pra della/Meleiro-SC) — achada
+via `distNSU` a partir do perfil della, 8 lotes de paginação, documento completo autorizado
+(`cStat 100`). Endpoint HTTP validado ponta a ponta com essa chave e com uma segunda chave de
+CT-e real (achada por acaso num teste), além do caso de erro (chave de NF-e → `422`).
+
 ---
 
 ## Notas de decisão

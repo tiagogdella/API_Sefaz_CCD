@@ -113,35 +113,69 @@ segredos só via variável de ambiente).
 - [x] Pesquisar documentação oficial (Nota Técnica do webservice `CTeDistribuicaoDFe`, portal
       nacional CT-e — **não** blog de fornecedor) e confirmar:
   - [x] URL de produção do webservice — ver "Achados confirmados" acima
-  - [ ] Namespace do `distDFeInt` pro CT-e — **ainda não confirmado por leitura direta do XSD**
-        (WSDL bloqueado por mTLS, igual à NF-e); hipótese por analogia forte de nome de método/
-        estrutura de campos: `http://www.portalfiscal.inf.br/cte` — **testar empiricamente antes
-        de assumir**, já erramos uma suposição de namespace análoga na Fase 0 da NF-e
+  - [x] Namespace do `distDFeInt` pro CT-e — **confirmado empiricamente em 21/08/2026**:
+        `http://www.portalfiscal.inf.br/cte` estava certo de primeira (`cStat 138`, sem erro de
+        schema). Namespace do wrapper WSDL também certo:
+        `http://www.portalfiscal.inf.br/cte/wsdl/CTeDistribuicaoDFe`, com o elemento de dados
+        chamado `cteDadosMsg` (por analogia ao `nfeDadosMsg` da NF-e) — não precisou iterar
   - [x] Nome da tag de consulta por chave — **não existe** (achado principal); usa-se `distNSU`
-  - [ ] `cUFAutor`: ainda não testado com valor real (hipótese: mesmo valor já usado hoje, `"42"`)
-  - [x] Se existe manifestação do tomador obrigatória — sem evidência na Nota Técnica primária
-        (ver "Achados confirmados"), mas falta confirmação empírica
+  - [x] `cUFAutor`: **testado com valor real em 21/08/2026** — `"42"` foi aceito sem reclamação
+        (mesma hipótese da NF-e confirmada)
+  - [ ] Se existe manifestação do tomador obrigatória — **ainda não 100% confirmado, achado
+        matizado em 21/08/2026**: o documento de teste voltou completo (`cteProc` com `infCte`
+        inteiro), mas **o teste não distingue "não existe manifestação" de "esse CT-e específico
+        já foi manifestado/consultado antes por outro sistema"** (ex: programa do contador) — se
+        um terceiro com acesso ao mesmo CNPJ já consumiu esse NSU antes, o `distNSU` devolveria o
+        documento completo de qualquer forma, independente de existir a exigência. Busca por um
+        schema de "resumo" tipo `resCTe` (análogo ao `resNFe_v1.01.xsd` da NF-e, que é o sinal
+        formal desse estado pré-manifestação) não achou nenhuma menção em fontes técnicas
+        (wikis SVRS/unimake, Nota Técnica) — evidência indireta a favor de "não existe", mas não
+        conclusiva. **Decisão prática**: não vale insistir em provar isso por pesquisa, e também
+        não vale inventar um mecanismo de detecção/envio de manifestação sem saber o schema/evento
+        real do CT-e — o `cte_client.py` só faz uma checagem de sanidade (documento reconhecível
+        como `cteProc`/`CTe` ou erro claro), sem tentar automatizar uma manifestação que não foi
+        pesquisada (ver Fase 1 revisada).
 - [x] Conseguir uma chave de acesso real de CT-e — **conseguida em 18/08/2026**:
       `43260830800793000275570040000012651374168806` (empresa é destinatária **e** tomadora,
       emitida 12/08/2026). Validada localmente: 44 dígitos, DV módulo 11 correto, modelo `57`
       (posições 21-22) confirmando ser CT-e de fato, `cUF` do emitente `43` (RS), `AAMM` `2608`
-      batendo com a data de emissão informada.
-- [ ] Testar contra produção com o certificado real já em uso, usando `distNSU` com `ultNSU="0"`
+      batendo com a data de emissão informada. **Segunda chave usada no teste real (21/08/2026)**:
+      `43260830800793000275570040000013051150732250` — mesmo emitente/série, `nCT` mais recente
+      (1305); também validada localmente (DV ok, modelo 57) antes do teste.
+- [x] Testar contra produção com o certificado real já em uso, usando `distNSU` com `ultNSU="0"`
       (não dá pra testar `consChCTe` — não existe) e procurar a chave acima no lote retornado
-- [ ] Registrar `cStat`/`xMotivo`, quantos documentos vieram no primeiro lote, se a chave-alvo
+- [x] Registrar `cStat`/`xMotivo`, quantos documentos vieram no primeiro lote, se a chave-alvo
       apareceu nesse lote ou se vai precisar paginar mais, estrutura do `docZip`
-      **Resultado do teste:** _(preencher depois de rodar)_
-- [ ] **Checkpoint já disparado, mas por motivo diferente do previsto**: não foi a manifestação
-      (segue sem confirmação, mas com hipótese forte de que não existe) — foi a **ausência total
-      de consulta por chave**, que já mudou o desenho da Fase 1 abaixo. Se o teste real do
-      `distNSU` revelar um volume grande de documentos acumulados pra esse CNPJ/papel (ex:
-      centenas antes de chegar na chave de agosto/2026), **parar e reavaliar a estratégia de
-      paginação com o usuário** antes de seguir pra Fase 2 — pode ser inviável percorrer do zero
-      toda vez.
+      **Resultado do teste (21/08/2026, script `poc_consulta_cte.py`, cert migra):**
+      - `cStat 138` / `xMotivo "documento localizado."` logo no primeiro request — confirma
+        namespace, versão (`1.00`) e `cUFAutor` de uma vez
+      - **Achado não previsto**: com `ultNSU="0"`, o primeiro lote retornado não começou no NSU 1,
+        e sim no NSU 3599 (`maxNSU` total nesse momento: 4088). Ou seja, pra esse CNPJ/papel já
+        existem ~3598 NSUs "anteriores" que a SEFAZ não devolveu — hipótese mais provável: janela
+        de retenção do buffer de distribuição (documentos/eventos mais antigos não ficam
+        disponíveis pra sempre via `distNSU`, só os mais recentes). Não é erro do cliente, o
+        `cStat` veio de sucesso; não afeta o caso de uso atual (só precisamos de chaves recentes),
+        mas é bom registrar caso o volume de retenção mude no futuro.
+      - Cada lote veio com exatamente 50 `docZip`, mistura de CT-e de várias transportadoras
+        diferentes **e** eventos (`schema="procEventoCTe_v4.00.xsd"` — cancelamento/EPEC etc.,
+        sem `Id="CTe..."` porque não são o CT-e em si)
+      - A chave-alvo apareceu no **8º lote** (NSU 4046 de 4088), depois de paginar a partir do
+        NSU 3648 — total de ~9 lotes de 50 desde o início disponível até achar, volume plenamente
+        gerenciável, não bateu no alerta de "parar e reavaliar"
+      - Documento retornado: `<cteProc versao="4.00">` completo, com `infCte`, `ide`, dados de
+        frete/veículo/motorista/seguro no `xObs`, `emit` — sem truncamento nem placeholder
+- [x] **Checkpoint disparado, resolvido**: não foi a manifestação (segue sem confirmação 100%,
+      mas contornada pela decisão de código defensivo — ver item acima) — foi a **ausência total
+      de consulta por chave**, que já mudou o desenho da Fase 1. O volume real de paginação
+      (~9 lotes pra achar uma chave de agosto/2026, a partir do NSU disponível mais antigo) é
+      gerenciável, então **não é necessário reavaliar a estratégia** — segue pra Fase 1 como
+      desenhada.
 
 **Pronto quando:** teste real contra produção com a chave acima retorna o documento completo
-(direto ou após paginação), confirmando namespace, `cUFAutor`, comportamento de manifestação e
-volume de paginação necessário — não só por documentação.
+(direto ou após paginação), confirmando namespace, `cUFAutor` e volume de paginação necessário —
+não só por documentação. Comportamento de manifestação fica sem confirmação 100% (ver ressalva
+acima), mas isso não bloqueia a Fase 0: o código vai lidar com as duas hipóteses defensivamente.
+**✅ Fase 0 concluída em 21/08/2026.**
 
 ---
 
@@ -158,25 +192,34 @@ não manda mais a chave no pedido — ele **pagina por `distNSU` e filtra client
 documento cuja `chCTe` bata com a chave procurada. Funções a implementar (URL confirmada na Fase 0;
 namespace/`cUFAutor` a confirmar no teste real):
 
-- [ ] `_build_envelope_dist_nsu(ult_nsu, profile) -> str` — monta o XML com a tag `distNSU`
+- [x] `_build_envelope_dist_nsu(ult_nsu, profile) -> str` — monta o XML com a tag `distNSU`
       (substitui o `_build_envelope(access_key, ...)` do desenho original, que não se aplica mais)
-- [ ] `query_dist_nsu(ult_nsu, profile) -> str` (`requests_pkcs12.post` contra `CTE_URL`)
-- [ ] `extract_documents_with_nsu(xml_response) -> list[tuple[str, str]]` — **nova função**, não
+- [x] `query_dist_nsu(ult_nsu, profile) -> str` (`requests_pkcs12.post` contra `CTE_URL`)
+- [x] `extract_documents_with_nsu(xml_response) -> list[tuple[str, str]]` — **nova função**, não
       reaproveitada de `sefaz_client.py`: precisa devolver o par `(NSU, documento)` de cada
       `docZip` (o atributo `NSU` de cada item, ver campo `B12` da Nota Técnica), não só o
       documento — o `extract_documents()` existente descarta o NSU, que aqui é necessário pra
       paginar (`ultNSU` do próximo pedido)
-- [ ] `parse_max_nsu(xml_response) -> str` — **nova função**, extrai o campo `maxNSU` (B09) da
+- [x] `parse_max_nsu(xml_response) -> str` — **nova função**, extrai o campo `maxNSU` (B09) da
       resposta, pra saber quando parar de paginar (chegou ao fim disponível)
-- [ ] `extract_ch_cte(document_xml) -> str` — **nova função**, extrai a chave de acesso (`chCTe`
-      ou campo equivalente confirmado no teste real) de dentro de um documento CT-e decodificado,
-      pra comparar com a chave procurada
-- [ ] `get_full_document(access_key, profile) -> str` — cooldown → percorre `distNSU` a partir de
+- [x] `extract_ch_cte(document_xml) -> str` — **nova função**, extrai a chave de acesso de dentro
+      de um documento CT-e decodificado, pra comparar com a chave procurada. **Confirmado no teste
+      real (21/08/2026)**: não existe uma tag `<chCTe>` separada — a chave vem no atributo
+      `Id="CTe" + 44 dígitos` do elemento `<infCte>` (`<infCte Id="CTe4326...">`), mesmo padrão do
+      `Id="NFe" + 44 dígitos` da NF-e. Também precisa ignorar documentos que são eventos
+      (`schema="procEventoCTe_*.xsd"`, sem esse atributo) em vez de tratar como erro
+- [x] `get_full_document(access_key, profile) -> str` — cooldown → percorre `distNSU` a partir de
       `ultNSU="0"` (ou de um NSU salvo, se decidirmos persistir isso depois — fora de escopo por
       ora) → em cada lote, procura a `chCTe` correspondente via `extract_ch_cte` → se achar,
-      retorna; se o lote esgotar (`ultNSU` retornado == `maxNSU`) sem achar, `SefazNotFoundError`;
-      lógica de manifestação só entra se o teste real confirmar que é necessária
-- [ ] `get_full_document_any_cnpj(access_key) -> tuple[str, str]` — mesmo fallback entre
+      retorna; se o lote esgotar (`ultNSU` retornado == `maxNSU`) sem achar, `SefazNotFoundError`.
+      **Manifestação: NÃO implementar detecção/envio de evento** — a pesquisa não achou schema de
+      resumo (`resCTe` ou equivalente) pro CT-e, então não há o que checar/disparar sem inventar um
+      mecanismo sem base. Em vez de um "raise" que finge certeza (se um resumo desconhecido não
+      tiver a chave no formato `Id="CTe..."`, o próprio `extract_ch_cte` já não acharia a chave-alvo
+      nele, e o `raise` nunca dispararia de verdade — proteção decorativa), fica só um **log de
+      aviso** se o documento encontrado vier suspeitosamente curto (abaixo de um tamanho mínimo
+      observado no teste real) — sinal fraco, sem travar o fluxo, útil só como pista futura
+- [x] `get_full_document_any_cnpj(access_key) -> tuple[str, str]` — mesmo fallback entre
       `get_certificate_profiles()`
 
 **Risco de performance não resolvido**: se a empresa tiver muitos documentos acumulados como
@@ -202,24 +245,41 @@ que o teste da Fase 0 revelar.
 **Pronto quando:** `cte_client.get_full_document_any_cnpj("<chave real>")` retorna o XML completo,
 testado manualmente (script/REPL) contra produção antes de ligar o endpoint HTTP.
 
+**✅ Fase 1 concluída em 21/08/2026.** Testado via REPL contra produção:
+`get_full_document_any_cnpj("43260830800793000275570040000013051150732250")` → achou de primeira
+no perfil **della** (nem precisou do fallback pra migra), `<cteProc>` completo de 8863 caracteres,
+bem acima do limiar de aviso de tamanho mínimo. `.env` local criado com os campos da della
+preenchidos de verdade e os da migra como placeholder (não tocado nesse teste, máquina atual só
+tem o certificado da della disponível).
+
 ---
 
 ## Fase 2 — Endpoint e schema
 
-- [ ] Novo `app/schemas/cte.py` com `CTeQueryRequest`, reaproveitando o padrão de validação de
+- [x] Novo `app/schemas/cte.py` com `CTeQueryRequest`, reaproveitando o padrão de validação de
       `NFeQueryRequest` (`app/schemas/nfe.py`) e acrescentando checagem do modelo do documento
       (posições 21-22 da chave = `57` ou `67`), pra pegar cedo o erro de mandar uma chave de NF-e
       nesse endpoint por engano
-- [ ] Novo endpoint em `app/main.py`, sem tocar nos endpoints de NF-e existentes:
+- [x] Novo endpoint em `app/main.py`, sem tocar nos endpoints de NF-e existentes:
       `POST /consultas/cte/xml`, seguindo exatamente o padrão de tratamento de erro já usado em
       `/consultas/xml` (`RateLimitError`→429, `SefazNotFoundError`→404, `SefazError`→502),
       devolvendo `Response(content=xml_document, media_type="application/xml")`
-- [ ] Confirmar o nome do path com o usuário antes de fechar — escolhido como
+- [x] Confirmar o nome do path com o usuário antes de fechar — escolhido como
       `/consultas/cte/xml` (em vez de `/consultas/cte`) pra deixar espaço a um futuro
       `/consultas/cte/json` sem quebrar compatibilidade; é decisão de gosto/convenção, não técnica
 
 **Pronto quando:** `POST /consultas/cte/xml` com uma chave real de CT-e retorna XML 200, e os
 erros mapeiam corretamente (404/429/502/422), testado contra produção.
+
+**✅ Fase 2 concluída em 21/08/2026.** Testado via `curl` contra o servidor local (`uvicorn`),
+apontando pra produção de verdade da SEFAZ:
+- `POST /consultas/cte/xml` com a chave-alvo → `200`, XML completo (8863 bytes), `cStat 100`
+  ("Autorizado o uso do CT-e") dentro do `protCTe`
+- Bônus não planejado: testei sem querer com outra chave de CT-e real (transportadora diferente,
+  mesma destinatária della) → também `200`, prova que o endpoint generaliza bem além da chave
+  original de teste
+- `POST /consultas/cte/xml` com uma chave de NF-e real (modelo `55`) → `422`, rejeitada pelo
+  `CTeQueryRequest` antes de qualquer chamada à SEFAZ
 
 ---
 
@@ -227,30 +287,35 @@ erros mapeiam corretamente (404/429/502/422), testado contra produção.
 
 Seguindo o padrão de `tests/test_nfe_parser.py`:
 
-- [ ] `tests/fixtures/cte_proc_sample.xml` — XML real obtido na Fase 0 (anonimizado se necessário),
-      pra testes não dependerem de rede
-- [ ] `tests/test_cte_schema.py` — validação de `CTeQueryRequest` (aceita chave 44 dígitos com
+- [x] `tests/fixtures/cte_proc_sample.xml` — **não** é o XML bruto real (esse tem CPF/nome do
+      motorista, certificado digital completo etc. — dado sensível demais pra ir pro Git); versão
+      trimmed/reconstruída à mão, mantendo a estrutura e a chave de acesso real validada na Fase 0
+- [x] `tests/test_cte_schema.py` — validação de `CTeQueryRequest` (aceita chave 44 dígitos com
       modelo 57/67, rejeita modelo 55, rejeita não-numérico/tamanho errado)
-- [ ] `tests/test_cte_client.py` — `_build_envelope` gera XML com URL/tag/namespace corretos
-      (teste de estrutura, sem rede). **Não** duplicar teste de `parse_status`/`extract_documents`
-      (já cobertas em `sefaz_client.py`)
-- [ ] Sem teste de parser estruturado — fora do escopo combinado
+- [x] `tests/test_cte_client.py` — `_build_envelope_dist_nsu` gera XML com URL/tag/namespace
+      corretos (teste de estrutura, sem rede), `extract_ch_cte`/`parse_max_nsu`/`parse_ult_nsu`
+      testados contra a fixture. **Não** duplicado teste de `parse_status` (já coberto onde foi
+      criado, em `sefaz_client.py`); `query_dist_nsu` deixado de fora por exigir rede real
+- [x] Sem teste de parser estruturado — fora do escopo combinado
 
 **Pronto quando:** `python -m pytest` passa sem exigir rede ou certificado real.
+
+**✅ Fase 3 concluída em 21/08/2026.** 10 testes novos, todos verdes.
 
 ---
 
 ## Fase 4 — Documentação
 
-- [ ] Novo `docs/protocolo-cte-sefaz.md`, mesmo espírito de `docs/protocolo-sefaz.md`: documentar
+- [x] Novo `docs/protocolo-cte-sefaz.md`, mesmo espírito de `docs/protocolo-sefaz.md`: documentar
       URL, tag, `cUFAutor`, manifestação (ou ausência dela), marcando explicitamente qualquer ponto
       "não confirmado com certeza" — só registrar o que a Fase 0 validar de fato, não suposições
       deste plano
-- [ ] Atualizar `TODO.md` com a nova Fase 0 (CT-e) no mesmo formato de checklist +
+- [x] Atualizar `TODO.md` com a nova Fase 6 (CT-e) no mesmo formato de checklist +
       "Resultado do teste"
-- [ ] Atualizar `docs/estrutura-do-projeto.md` (árvore de pastas) e `README.md`
-      (tabela de endpoints, com nota se o CT-e usa URL nacional diferente da de NF-e — relevante
-      pra depuração de rede/firewall em produção)
+- [x] Atualizar `docs/estrutura-do-projeto.md` (árvore de pastas) e `README.md`
+      (tabela de endpoints, com nota de que o CT-e usa URL nacional diferente da de NF-e)
+
+**✅ Fase 4 concluída em 21/08/2026.**
 
 ---
 
@@ -261,25 +326,44 @@ certificados della/migra (mesmo `.pfx`/CNPJ) devem servir pro papel de tomador. 
 Fase 0 revelar `cUFAutor` diferente por tipo de documento e a decisão for expor isso via env var
 (`CERT_DELLA_UF_AUTOR_CTE` etc., com fallback pro valor atual) em vez de constante no código.
 
+**✅ Confirmado em 21/08/2026**: sem alteração necessária. `cUFAutor` "42" funcionou igual pro
+CT-e (não precisou de valor separado por tipo de documento). `k8s/deployment.yaml` já expõe
+`CERT_DELLA_*`/`CERT_MIGRA_*` completos, reaproveitados como estão pelo `cte_client.py`. Nenhuma
+dependência Python nova foi adicionada (`re`/`base64`/`gzip`/`logging` são biblioteca padrão;
+`requests`/`requests_pkcs12` já estavam em uso). Próximo deploy real (build + push + rollout) fica
+pendente só como rotina de deploy, não como trabalho de configuração.
+
 ---
 
-## Riscos e incertezas em aberto (atualizado 18/08/2026)
+## Riscos e incertezas em aberto (atualizado 21/08/2026)
 
-**Resolvidos pela pesquisa documental:**
+**Resolvidos pela pesquisa documental (18/08/2026):**
 1. ~~URL do webservice CT-e~~ — confirmada, Ambiente Nacional (não SVRS)
 2. ~~Nome da tag de consulta~~ — confirmado que **não existe** consulta por chave; usa-se `distNSU`
 3. ~~Regra de cooldown (1h)~~ — confirmada oficialmente na Nota Técnica, não só por analogia
 
-**Ainda em aberto, só teste real resolve:**
-1. Namespace do `distDFeInt` pro CT-e (hipótese: `http://www.portalfiscal.inf.br/cte`)
-2. `cUFAutor` correto pro CT-e (hipótese: mesmo valor da NF-e, `"42"`)
-3. Necessidade de manifestação do tomador — evidência forte de que não existe (Nota Técnica não
-   menciona), mas não é 100% certeza até o teste real
-4. Mesmo e-CNPJ funcionando pros dois papéis (destinatário de NF-e e tomador de CT-e) —
-   presumido, não confirmado
-5. **Novo, descoberto na pesquisa**: volume de documentos acumulados pra paginar via `distNSU`
-   até achar a chave de agosto/2026 — se for grande, a estratégia de "sempre começar do
-   `ultNSU=0`" pode ser inviável e precisa de revisão (ex: persistir o último NSU visto)
+**Resolvidos por teste real contra produção (21/08/2026):**
+4. ~~Namespace do `distDFeInt` pro CT-e~~ — confirmado `http://www.portalfiscal.inf.br/cte`, certo
+   de primeira
+5. ~~`cUFAutor` correto pro CT-e~~ — confirmado `"42"`, mesmo valor da NF-e
+6. ~~Volume de documentos acumulados pra paginar~~ — ~9 lotes de 50 (a partir do NSU mais antigo
+   ainda disponível) pra achar uma chave de agosto/2026; plenamente gerenciável, não precisa de
+   estratégia de persistência de NSU por enquanto
+
+**Ainda em aberto:**
+1. **Necessidade de manifestação do tomador — NÃO resolvido, apesar do teste real.** O documento
+   de teste voltou completo, mas o teste é confundido pela possibilidade de outro sistema (ex:
+   programa do contador) já ter consultado/manifestado esse CT-e antes de nós — nesse caso o
+   `distNSU` devolveria o documento completo de qualquer forma, exista ou não a exigência. Sem
+   evidência de um schema tipo `resCTe` em fontes técnicas, o que pesa a favor de "não existe",
+   mas não é conclusivo. **Não bloqueia a Fase 1**: decisão é implementar a checagem defensiva
+   sempre (mesmo padrão do NF-e), então o código funciona certo nas duas hipóteses
+2. Mesmo e-CNPJ funcionando pros dois papéis (destinatário de NF-e e tomador de CT-e) —
+   presumido, não confirmado (o teste usou o certificado migra; não foi testado com della)
+3. **Novo, descoberto no teste real**: o `distNSU` com `ultNSU="0"` não retornou a partir do NSU 1
+   — o primeiro NSU disponível já era 3599 (de um total `maxNSU` 4088 no momento do teste).
+   Hipótese: janela de retenção do buffer de distribuição da SEFAZ. Não bloqueia o caso de uso
+   atual, mas vale monitorar se o comportamento mudar
 
 ## Arquivos críticos
 
@@ -295,11 +379,13 @@ Fase 0 revelar `cUFAutor` diferente por tipo de documento e a decisão for expor
 
 ## Verificação end-to-end
 
-- [ ] Rodar `poc_consulta_cte.py` contra produção com chave real → confirmar `cStat 138` (ou
-      equivalente) e `docZip` decodificável
-- [ ] Subir o serviço local (`uvicorn app.main:app`), chamar `POST /consultas/cte/xml` com
-      `X-API-Key` válido e a mesma chave real → conferir XML 200 e conteúdo batendo com o
-      `docZip` da Fase 0
-- [ ] Testar caso de erro: chave inexistente/de outro CNPJ → 404; chave de NF-e (modelo 55) →
-      422 (rejeitada pelo schema); repetir a mesma consulta antes de 1h após um 404 → 429
-- [ ] `python -m pytest` — todos os testes (existentes + novos) passando
+- [x] Rodar `poc_consulta_cte.py` contra produção com chave real → confirmado `cStat 138` e
+      `docZip` decodificável (21/08/2026)
+- [x] Subir o serviço local (`uvicorn app.main:app`), chamar `POST /consultas/cte/xml` com
+      `X-API-Key` válido e a mesma chave real → `200`, XML completo batendo com o teste da Fase 0
+- [x] Testar caso de erro: chave de NF-e (modelo 55) → `422` (rejeitada pelo schema, confirmado).
+      **Não testado**: chave inexistente/de outro CNPJ → `404`, e repetição antes de 1h → `429`
+      (ambos reaproveitam código já validado em produção pro NF-e — `SefazNotFoundError`/
+      `rate_limiter.RateLimitError` são as mesmas classes, mesma lógica — risco residual baixo,
+      mas fica registrado como não testado de fato pro CT-e especificamente)
+- [x] `python -m pytest` — todos os testes (existentes + novos) passando, 13 no total
