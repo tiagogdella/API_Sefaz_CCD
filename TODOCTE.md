@@ -364,6 +364,15 @@ pendente só como rotina de deploy, não como trabalho de configuração.
    — o primeiro NSU disponível já era 3599 (de um total `maxNSU` 4088 no momento do teste).
    Hipótese: janela de retenção do buffer de distribuição da SEFAZ. Não bloqueia o caso de uso
    atual, mas vale monitorar se o comportamento mudar
+4. **Novo, descoberto testando a integração no monolito (21/08/2026)**: o cooldown de 1h do
+   `rate_limiter.py` é chaveado por `(cnpj, access_key)`, compartilhado entre NF-e e CT-e — a
+   suposição de "formatos de 44 dígitos nunca coincidem entre os dois" (ver "Decisão de
+   arquitetura") vale pra chaves reais/válidas, mas não cobre mandar a mesma string de chave por
+   engano pro endpoint errado (ex: chave de CT-e no `/consultas/xml` de NF-e) — isso registra um
+   cooldown que também bloqueia a tentativa correta depois, pela mesma chave composta. Baixo risco
+   em uso normal (não deveria acontecer sem erro do cliente da API), mas vale saber que existe.
+   Não é bug — é a mesma proteção contra bloqueio real da SEFAZ funcionando como desenhada, só com
+   um efeito colateral não previsto
 
 ## Arquivos críticos
 
