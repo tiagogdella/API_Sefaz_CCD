@@ -119,6 +119,30 @@ via `distNSU` a partir do perfil della, 8 lotes de paginação, documento comple
 (`cStat 100`). Endpoint HTTP validado ponta a ponta com essa chave e com uma segunda chave de
 CT-e real (achada por acaso num teste), além do caso de erro (chave de NF-e → `422`).
 
+## Fase 7 — NFS-e (nota de serviço, padrão nacional) — ainda não iniciada
+
+> Demanda nova (02/10/2026): usuário tentou consultar uma nota de serviço da Della pelo
+> `/consultas/xml` e caiu no erro de "chave não tem 44 dígitos" — a chave tinha 50 dígitos de
+> propósito, porque **NFS-e Nacional não é NF-e nem CT-e**: é um sistema totalmente separado
+> (Ambiente de Dados Nacional, API REST/JSON, não SOAP), que o `API_Sefaz` ainda não sabe
+> consultar. Plano completo (achados, decisão de arquitetura, fases) em
+> [`TODONFSE.md`](TODONFSE.md) — aqui só o resumo executivo, mesmo formato das outras fases.
+
+- [ ] **Fase 0 (pesquisa + validação empírica)**: achados preliminares só por busca (não leitura
+      completa do manual oficial) — API REST no ADN, chave de 50 dígitos, consulta direta por
+      chave parece existir (`GET /nfse/{chaveAcesso}`, diferente do CT-e que não tem isso). Nada
+      confirmado por teste real ainda. A chave que o usuário passou não validou módulo 11 em
+      nenhum recorte — pode ser porque o DV da NFS-e usa outro algoritmo (mais provável) ou erro
+      de transcrição; conferir via QR code antes de gastar a Fase 0 com ela
+- [ ] **Fase 1 (`app/services/nfse_client.py`)**: não iniciada
+- [ ] **Fase 2 (`POST /consultas/nfse/xml`)**: não iniciada — vai precisar de mudança no
+      `controleDeCompra` também, pra rotear pelo tamanho da chave (44 vs 50) antes de chamar o
+      `sefaz`
+- [ ] **Fase 3 (testes automatizados)**: não iniciada
+- [ ] **Fase 4 (documentação)**: não iniciada
+- [ ] **Fase 5 (deploy/config)**: expectativa é zero mudança (mesmos certificados della/migra),
+      mas só confirmar depois da Fase 0/1
+
 ---
 
 ## Notas de decisão
