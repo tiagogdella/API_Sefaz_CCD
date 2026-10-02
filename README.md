@@ -14,7 +14,8 @@ configured certificate until it finds the document, with no manual selection req
 protocol details, rate limits, gotchas), [`docs/protocolo-cte-sefaz.md`](docs/protocolo-cte-sefaz.md)
 (CT-e protocol details — different national endpoint, no direct key lookup),
 [`docs/estrutura-do-projeto.md`](docs/estrutura-do-projeto.md) (folder-by-folder map) and
-[`TODO.md`](TODO.md) / [`TODOCTE.md`](TODOCTE.md) (roadmap and decision log).
+[`TODO.md`](TODO.md) / [`TODOCTE.md`](TODOCTE.md) / [`TODONFSE.md`](TODONFSE.md) (roadmap and
+decision log — NFS-e support is planned, not yet implemented).
 
 ## Requirements
 

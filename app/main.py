@@ -6,6 +6,8 @@ from app.core.auth import verify_api_key
 from app.core.logging_config import configure_logging
 from app.schemas.cte import CTeQueryRequest
 from app.services import cte_client
+from app.schemas.nfse import NFSeQueryRequest
+from app.services import nfse_client
 
 configure_logging()
 
@@ -55,5 +57,17 @@ def query_cte_xml(payload: CTeQueryRequest):
 
     return Response(content=xml_document, media_type="application/xml")
 
-    
+
+@app.post("/consultas/nfse/xml", dependencies=[Depends(verify_api_key)])
+def query_nfse_xml(payload: NFSeQueryRequest):
+    try:
+        xml_document, _ = nfse_client.get_full_document_any_cnpj(payload.access_key)
+    except rate_limiter.RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e)) from e
+    except sefaz_client.SefazNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except sefaz_client.SefazError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    return Response(content=xml_document, media_type="application/xml")
     
