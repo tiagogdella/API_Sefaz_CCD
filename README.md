@@ -1,9 +1,10 @@
 # API_Sefaz
 
 Python/FastAPI microservice that integrates the purchase-control system with SEFAZ's national
-**NFe Distribuição DFe** and **Manifestação do Destinatário** webservices, authenticated via
+**NFe Distribuição DFe**, **CT-e Distribuição DFe** and **Manifestação do Destinatário**
+webservices, plus the **NFS-e Nacional** REST API (Ambiente de Dados Nacional), authenticated via
 digital certificate (e-CNPJ, A1) over mTLS. It gives the [`controleDeCompra`](../controleDeCompra)
-monolith a clean JSON/XML contract instead of dealing with SOAP, certificates and XML signing
+monolith a clean JSON/XML contract instead of dealing with SOAP/REST, certificates and XML signing
 directly.
 
 Supports multiple CNPJ certificates (`della`, `migra`) — a lookup automatically tries each
@@ -13,9 +14,11 @@ configured certificate until it finds the document, with no manual selection req
 (how this fits with the monolith), [`docs/protocolo-sefaz.md`](docs/protocolo-sefaz.md) (NF-e
 protocol details, rate limits, gotchas), [`docs/protocolo-cte-sefaz.md`](docs/protocolo-cte-sefaz.md)
 (CT-e protocol details — different national endpoint, no direct key lookup),
+[`docs/protocolo-nfse-sefaz.md`](docs/protocolo-nfse-sefaz.md) (NFS-e protocol details — REST/JSON,
+not SOAP, 50-digit access key),
 [`docs/estrutura-do-projeto.md`](docs/estrutura-do-projeto.md) (folder-by-folder map) and
 [`TODO.md`](TODO.md) / [`TODOCTE.md`](TODOCTE.md) / [`TODONFSE.md`](TODONFSE.md) (roadmap and
-decision log — NFS-e support is planned, not yet implemented).
+decision log).
 
 ## Requirements
 
@@ -84,8 +87,9 @@ All endpoints except `/health` require the `X-API-Key` header.
 | `POST /consultas/nfe` | Body `{ "accessKey": "<44 digits>" }` — queries SEFAZ (trying each configured certificate), sends the manifestação event automatically if only a summary is available yet, and returns parsed JSON (supplier, items, totals) |
 | `POST /consultas/xml` | Same lookup, but returns the raw signed `nfeProc` XML for download instead of parsed JSON |
 | `POST /consultas/cte/xml` | Body `{ "accessKey": "<44 digits, model 57 or 67>" }` — CT-e (freight) lookup, company as tomadora. Returns the raw signed `cteProc` XML. **Different national webservice/URL than NF-e** (`www1.cte.fazenda.gov.br`, not `www1.nfe.fazenda.gov.br`) — relevant if debugging network/firewall issues in production. No structured-JSON variant yet (XML only, by design) |
+| `POST /consultas/nfse/xml` | Body `{ "accessKey": "<50 digits>" }` — NFS-e (service invoice) lookup. Returns the raw `NFSe` XML. **Not SOAP, not the same system as NF-e/CT-e** — talks to the ADN (Ambiente de Dados Nacional) REST API (`adn.nfse.gov.br`), see [`docs/protocolo-nfse-sefaz.md`](docs/protocolo-nfse-sefaz.md). Access key has 50 digits, not 44 — easy to confuse with a mistyped NF-e/CT-e key |
 
-All three query endpoints raise:
+All four query endpoints raise:
 - `404` — key not found for any configured CNPJ
 - `429` — local cooldown active (avoids triggering SEFAZ's own anti-abuse block; wait ~1h)
 - `502` — connection/certificate error, or an unexpected SEFAZ rejection

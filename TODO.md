@@ -148,11 +148,18 @@ CT-e real (achada por acaso num teste), além do caso de erro (chave de NF-e →
       novo
 - [x] **Fase 3 (testes automatizados)**: `tests/test_nfse_schema.py` + `tests/test_nfse_client.py`,
       8 testes novos, `python -m pytest` completo (NF-e + CT-e + NFS-e) passando — 21 no total
-- [ ] **Fase 4 (documentação)**: não iniciada
-- [ ] **Fase 5 (deploy real)**: **bloqueado** — o `ghcr-secret` continua com PAT expirado (mesmo
-      problema de 09/09/2026) e `imagePullPolicy` está em `IfNotPresent`, então uma imagem nova
-      não seria puxada pelo cluster mesmo após build+push. Tudo que foi testado hoje rodou direto
-      no pod (mudança efêmera, não sobrevive a um restart) — não é um deploy de verdade ainda
+- [x] **Fase 4 (documentação)**: [`docs/protocolo-nfse-sefaz.md`](docs/protocolo-nfse-sefaz.md)
+      (novo), `README.md` e `docs/estrutura-do-projeto.md` atualizados, esta seção do `TODO.md`
+- [x] **Fase 5 (deploy real)**: **feito em 02/10/2026** — `ghcr-secret` recriado com PAT novo
+      (`read:packages` + `write:packages`; o PAT anterior tinha expirado, mesmo problema de
+      09/09/2026), `imagePullPolicy` revertido pra `Always`, merge `feat/nfse-query` → `main`
+      (push feito), `docker build` + `push` da imagem nova, `kubectl rollout restart`. Confirmado
+      em produção real (porta 8000, não teste isolado): pod novo puxou a imagem do ghcr.io de
+      verdade (76.497.018 bytes, evento `Pulled` do kubelet), `nfse_client.py` presente na
+      imagem oficial, `POST /consultas/nfse/xml` → `200` com a chave real do usuário, sem
+      regressão em `/health`/outros endpoints. **Certificado da migra também renovado nessa
+      mesma janela** (válido até 22/09/2027, estava vencido desde 22/09/2026) — aproveitado o
+      mesmo restart
 
 ---
 
