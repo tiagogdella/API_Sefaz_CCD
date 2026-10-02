@@ -128,20 +128,31 @@ CT-e real (achada por acaso num teste), além do caso de erro (chave de NF-e →
 > consultar. Plano completo (achados, decisão de arquitetura, fases) em
 > [`TODONFSE.md`](TODONFSE.md) — aqui só o resumo executivo, mesmo formato das outras fases.
 
-- [ ] **Fase 0 (pesquisa + validação empírica)**: achados preliminares só por busca (não leitura
-      completa do manual oficial) — API REST no ADN, chave de 50 dígitos, consulta direta por
-      chave parece existir (`GET /nfse/{chaveAcesso}`, diferente do CT-e que não tem isso). Nada
-      confirmado por teste real ainda. A chave que o usuário passou não validou módulo 11 em
-      nenhum recorte — pode ser porque o DV da NFS-e usa outro algoritmo (mais provável) ou erro
-      de transcrição; conferir via QR code antes de gastar a Fase 0 com ela
-- [ ] **Fase 1 (`app/services/nfse_client.py`)**: não iniciada
-- [ ] **Fase 2 (`POST /consultas/nfse/xml`)**: não iniciada — vai precisar de mudança no
-      `controleDeCompra` também, pra rotear pelo tamanho da chave (44 vs 50) antes de chamar o
-      `sefaz`
-- [ ] **Fase 3 (testes automatizados)**: não iniciada
+- [x] **Fase 0 (pesquisa + validação empírica)**: manual oficial é curto (3 páginas) — detalhe
+      real veio do Swagger baixado autenticado da sandbox. **Correção importante**: não existe
+      consulta direta por chave (diferente do que a pesquisa preliminar sugeriu) — só
+      `GET /DFe/{NSU}` + filtro client-side, igual ao CT-e, só que a `ChaveAcesso` já vem como
+      campo próprio (não precisa decodificar XML pra filtrar). Teste real contra produção
+      (02/10/2026, certificado della): achou a chave do usuário em 3 lotes (NSU 1→131), XML
+      completo (10.817 caracteres, `cStat 100`) — a chave estava correta desde o início, era só
+      o módulo 11 que não é o algoritmo certo do DV da NFS-e
+- [x] **Fase 1 (`app/services/nfse_client.py`)**: feito e testado via REPL contra produção real —
+      achou a mesma chave, mesmo XML. Fallback entre perfis melhorado em relação aos outros dois
+      clientes: também pula pro próximo certificado em erro de conexão/certificado (não só
+      "não encontrado"), pra o problema da migra vencida não mascarar um resultado que a della
+      acharia
+- [x] **Fase 2 (`POST /consultas/nfse/xml` + `app/schemas/nfse.py`)**: feito, testado com
+      `requests` contra uma instância na porta 8001 dentro do pod (sem afetar a produção real na
+      8000) — `200` com a chave real, `422` com chave de 44 dígitos. **Pendente fora deste repo**:
+      o `controleDeCompra` ainda só valida 44 dígitos, precisa aceitar 50 e rotear pro endpoint
+      novo
+- [x] **Fase 3 (testes automatizados)**: `tests/test_nfse_schema.py` + `tests/test_nfse_client.py`,
+      8 testes novos, `python -m pytest` completo (NF-e + CT-e + NFS-e) passando — 21 no total
 - [ ] **Fase 4 (documentação)**: não iniciada
-- [ ] **Fase 5 (deploy/config)**: expectativa é zero mudança (mesmos certificados della/migra),
-      mas só confirmar depois da Fase 0/1
+- [ ] **Fase 5 (deploy real)**: **bloqueado** — o `ghcr-secret` continua com PAT expirado (mesmo
+      problema de 09/09/2026) e `imagePullPolicy` está em `IfNotPresent`, então uma imagem nova
+      não seria puxada pelo cluster mesmo após build+push. Tudo que foi testado hoje rodou direto
+      no pod (mudança efêmera, não sobrevive a um restart) — não é um deploy de verdade ainda
 
 ---
 
